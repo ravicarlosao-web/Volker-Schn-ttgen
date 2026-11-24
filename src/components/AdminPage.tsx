@@ -3,6 +3,8 @@ import {
   ArrowLeft,
   ArrowUpRight,
   Check,
+  CloudUpload,
+  Database,
   ImagePlus,
   Lock,
   LogOut,
@@ -23,7 +25,13 @@ interface AdminPageProps {
   onExit: () => void;
 }
 
-type AdminTab = 'hero' | 'categories' | 'works' | 'journal' | 'enquiries';
+type AdminTab =
+  | 'hero'
+  | 'categories'
+  | 'works'
+  | 'journal'
+  | 'enquiries'
+  | 'sync';
 
 interface AuthStatusResponse {
   adminEnabled?: boolean;
@@ -31,10 +39,28 @@ interface AuthStatusResponse {
   needsSetup: boolean;
 }
 
+interface AdminSyncStats {
+  totalImages: number;
+  cloudinaryImages: number;
+  remainingLocalAssets: number;
+  syncedPercent: number;
+  readyToMigrate: boolean;
+  fullySynchronized: boolean;
+}
+
+interface AdminStorageCounts {
+  siteImages: number;
+  categories: number;
+  projects: number;
+  journal: number;
+}
+
 interface AdminStorageState {
   tursoCloud: boolean;
   persistenceEnabled: boolean;
   cloudinaryConfigured: boolean;
+  sync: AdminSyncStats;
+  counts: AdminStorageCounts;
 }
 
 interface ImageFieldProps {
@@ -232,7 +258,25 @@ export function AdminPage({ onExit }: AdminPageProps) {
     tursoCloud: false,
     persistenceEnabled: true,
     cloudinaryConfigured: false,
+    sync: {
+      totalImages: 0,
+      cloudinaryImages: 0,
+      remainingLocalAssets: 0,
+      syncedPercent: 0,
+      readyToMigrate: false,
+      fullySynchronized: false,
+    },
+    counts: {
+      siteImages: 3,
+      categories: 0,
+      projects: 0,
+      journal: 0,
+    },
   });
+  const [migrating, setMigrating] = useState(false);
+  const [lastMigrationSummary, setLastMigrationSummary] = useState<string | null>(
+    null,
+  );
   const [authLoading, setAuthLoading] = useState(true);
 
   // Login / First-run setup form
@@ -335,11 +379,13 @@ export function AdminPage({ onExit }: AdminPageProps) {
       if (statusRes.ok) {
         const statusJson = (await statusRes.json()) as Partial<AdminStorageState>;
         canPersist = statusJson.persistenceEnabled ?? true;
-        setAdminStorage({
+        setAdminStorage((prev) => ({
           tursoCloud: Boolean(statusJson.tursoCloud),
           persistenceEnabled: canPersist,
           cloudinaryConfigured: Boolean(statusJson.cloudinaryConfigured),
-        });
+          sync: statusJson.sync ?? prev.sync,
+          counts: statusJson.counts ?? prev.counts,
+        }));
       }
 
       if (!canPersist) {
@@ -807,9 +853,67 @@ export function AdminPage({ onExit }: AdminPageProps) {
     notify('ok', 'Enquiry deleted.');
   };
 
+  const handleMigrateToCloud = async () => {
+    if (
+      !adminStorage.tursoCloud ||
+      !adminStorage.cloudinaryConfigured ||
+      migrating
+    ) {
+      return;
+    }
+
+    setMigrating(true);
+    try {
+      const res = await adminFetch('/api/admin/migrate', {
+        method: 'POST',
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        imagesUploaded?: number;
+        sync?: AdminSyncStats;
+        counts?: AdminStorageCounts;
+        error?: string;
+      };
+
+      if (!res.ok || !body.ok) {
+        notify(
+          'err',
+          body.error || 'Migration failed. Verify Turso & Cloudinary credentials.',
+        );
+        return;
+      }
+
+      if (body.sync || body.counts) {
+        setAdminStorage((prev) => ({
+          ...prev,
+          sync: body.sync ?? prev.sync,
+          counts: body.counts ?? prev.counts,
+        }));
+      }
+
+      const uploadedCount = body.imagesUploaded ?? 0;
+      const percent = body.sync?.syncedPercent ?? 100;
+      setLastMigrationSummary(
+        `Migrated ${uploadedCount} asset(s) to Cloudinary & synchronized all tables to Turso (${percent}%).`,
+      );
+      await refreshPortfolio();
+      await fetchAdminStatusAndEnquiries();
+      notify(
+        'ok',
+        `Cloud sync complete (${percent}% · ${uploadedCount} new upload${uploadedCount === 1 ? '' : 's'}).`,
+      );
+    } catch {
+      notify('err', 'Network error while migrating content to cloud.');
+    } finally {
+      setMigrating(false);
+    }
+  };
+
   const tursoCloud = adminStorage.tursoCloud;
   const persistenceEnabled = adminStorage.persistenceEnabled;
   const cloudinaryConfigured = adminStorage.cloudinaryConfigured;
+  const syncStats = adminStorage.sync;
+  const canMigrate = tursoCloud && cloudinaryConfigured && !migrating;
   const unreadCount = enquiries.filter((e) => e.status === 'NEW').length;
 
   const filteredWorks = projects.filter((p) => {
@@ -1038,6 +1142,12 @@ export function AdminPage({ onExit }: AdminPageProps) {
       label: 'JOURNAL',
       meta: String(journalEntries.length).padStart(2, '0'),
     },
+    {
+      id: 'sync',
+      code: '06',
+      label: 'CLOUD SYNC',
+      meta: `${syncStats.syncedPercent}%`,
+    },
   ];
 
   const activeNavItem =
@@ -1219,8 +1329,13 @@ export function AdminPage({ onExit }: AdminPageProps) {
             </span>
           </div>
           <span className="font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666]">
-            {tursoCloud ? 'TURSO CLOUD' : 'LOCAL SQLITE'} ·{' '}
-            {cloudinaryConfigured ? 'CLOUDINARY READY' : 'LOCAL MEDIA STORAGE'}
+            {tursoCloud
+              ? 'TURSO CLOUD'
+              : persistenceEnabled
+                ? 'LOCAL SQLITE'
+                : 'READ-ONLY SEED'}{' '}
+            ·{' '}
+            {cloudinaryConfigured ? 'CLOUDINARY READY' : 'CLOUDINARY MISSING'}
           </span>
         </div>
 
@@ -1230,13 +1345,22 @@ export function AdminPage({ onExit }: AdminPageProps) {
             <div className="border border-black/25 bg-[#fafafa] px-5 py-4 flex flex-wrap items-center justify-between gap-4">
               <div className="text-[13px] leading-[1.5] text-[#262626]">
                 <strong className="font-mono text-[10px] tracking-[0.12em] uppercase mr-2">
-                  INITIAL LOCAL MODE:
+                  CLOUD SETUP PENDING:
                 </strong>
                 {!tursoCloud &&
-                  'Database running cleanly on local SQLite (local-studio.db) until TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are added. '}
+                  (persistenceEnabled
+                    ? 'Using local SQLite (local-studio.db) until TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are configured. '
+                    : 'Running on read-only seed data until TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are configured. ')}
                 {!cloudinaryConfigured &&
-                  'Image uploads are saved locally under /uploads until CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET are added.'}
+                  'Image uploads and Cloud Migration remain disabled until CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET are configured.'}
               </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('sync')}
+                className="border border-black/30 px-3 py-1.5 font-mono text-[10px] tracking-[0.12em] uppercase text-black hover:bg-black hover:text-white transition-colors cursor-pointer shrink-0"
+              >
+                VIEW CLOUD SYNC
+              </button>
             </div>
           </div>
         )}
@@ -2355,6 +2479,178 @@ export function AdminPage({ onExit }: AdminPageProps) {
                     : 'PUBLISH JOURNAL ENTRY'}
               </button>
             </form>
+          </section>
+        )}
+
+        {/* ================= TAB 6: CLOUD SYNC & MIGRATION ================= */}
+        {activeTab === 'sync' && (
+          <section className="space-y-8">
+            <div className="pb-5 border-b border-black/20 flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[#666666]">
+                  TURSO CLOUD + CLOUDINARY SYNCHRONIZATION
+                </span>
+                <h2 className="mt-1 text-[30px] font-normal tracking-[-0.02em]">
+                  Cloud Sync &amp; Migration
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void fetchAdminStatusAndEnquiries()}
+                className="inline-flex items-center gap-2 border border-black/25 px-3.5 py-2 font-mono text-[10px] tracking-[0.12em] uppercase text-black hover:bg-black hover:text-white transition-colors cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.5} />
+                <span>REFRESH STATUS</span>
+              </button>
+            </div>
+
+            {/* Prerequisites Status Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="border border-black/20 p-6 bg-white space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="inline-flex items-center gap-2 font-mono text-[10px] tracking-[0.14em] uppercase text-[#666666]">
+                    <Database className="w-4 h-4 text-black" strokeWidth={1.5} />
+                    <span>TURSO CLOUD DATABASE</span>
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 font-mono text-[10px] tracking-[0.12em] uppercase border ${
+                      tursoCloud
+                        ? 'bg-black text-white border-black'
+                        : 'bg-[#fafafa] text-[#595959] border-black/25'
+                    }`}
+                  >
+                    {tursoCloud ? 'CONNECTED' : 'NOT CONNECTED'}
+                  </span>
+                </div>
+                <p className="text-[13px] leading-[1.6] text-[#404040]">
+                  {tursoCloud
+                    ? 'Turso libSQL Cloud connection active. All settings, categories, artworks, journal entries, and enquiries persist remotely.'
+                    : 'Requires TURSO_DATABASE_URL and TURSO_AUTH_TOKEN configured in environment variables.'}
+                </p>
+              </div>
+
+              <div className="border border-black/20 p-6 bg-white space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="inline-flex items-center gap-2 font-mono text-[10px] tracking-[0.14em] uppercase text-[#666666]">
+                    <CloudUpload className="w-4 h-4 text-black" strokeWidth={1.5} />
+                    <span>CLOUDINARY STORAGE</span>
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 font-mono text-[10px] tracking-[0.12em] uppercase border ${
+                      cloudinaryConfigured
+                        ? 'bg-black text-white border-black'
+                        : 'bg-[#fafafa] text-[#595959] border-black/25'
+                    }`}
+                  >
+                    {cloudinaryConfigured ? 'CONNECTED' : 'NOT CONNECTED'}
+                  </span>
+                </div>
+                <p className="text-[13px] leading-[1.6] text-[#404040]">
+                  {cloudinaryConfigured
+                    ? 'Cloudinary signed upload and migration pipeline ready. All studio photographs are hosted on Cloudinary CDN.'
+                    : 'Requires CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET configured in environment variables.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Sync Telemetry & Progress */}
+            <div className="border border-black/20 p-6 sm:p-8 bg-white space-y-6">
+              <div className="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[#666666]">
+                    DATABASE &amp; MEDIA PARITY
+                  </span>
+                  <h3 className="mt-1 text-[22px] font-normal tracking-[-0.015em]">
+                    {syncStats.fullySynchronized
+                      ? '100% Synchronized with Turso & Cloudinary'
+                      : `${syncStats.syncedPercent}% Synchronized`}
+                  </h3>
+                </div>
+                <span className="font-mono text-[11px] tracking-[0.12em] uppercase tabular-nums text-black">
+                  {syncStats.cloudinaryImages} / {syncStats.totalImages} IMAGES IN CLOUDINARY
+                </span>
+              </div>
+
+              <div className="w-full h-2 bg-black/10 overflow-hidden">
+                <div
+                  className="h-full bg-black transition-all duration-300"
+                  style={{ width: `${syncStats.syncedPercent}%` }}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2 border-t border-black/10">
+                <div>
+                  <span className="block font-mono text-[9px] tracking-[0.12em] uppercase text-[#666666]">
+                    REMAINING LOCAL
+                  </span>
+                  <span className="mt-1 block font-mono text-[18px] tabular-nums text-black">
+                    {syncStats.remainingLocalAssets}
+                  </span>
+                </div>
+                <div>
+                  <span className="block font-mono text-[9px] tracking-[0.12em] uppercase text-[#666666]">
+                    SITE IMAGES
+                  </span>
+                  <span className="mt-1 block font-mono text-[18px] tabular-nums text-black">
+                    {adminStorage.counts.siteImages}
+                  </span>
+                </div>
+                <div>
+                  <span className="block font-mono text-[9px] tracking-[0.12em] uppercase text-[#666666]">
+                    CATEGORIES / WORKS
+                  </span>
+                  <span className="mt-1 block font-mono text-[18px] tabular-nums text-black">
+                    {categories.length} / {projects.length}
+                  </span>
+                </div>
+                <div>
+                  <span className="block font-mono text-[9px] tracking-[0.12em] uppercase text-[#666666]">
+                    JOURNAL ENTRIES
+                  </span>
+                  <span className="mt-1 block font-mono text-[18px] tabular-nums text-black">
+                    {journalEntries.length}
+                  </span>
+                </div>
+              </div>
+
+              {!tursoCloud || !cloudinaryConfigured ? (
+                <div className="border border-black/20 bg-[#fafafa] px-4 py-3.5 font-mono text-[11px] tracking-[0.06em] uppercase text-[#404040]">
+                  MIGRATION LOCKED: CONNECT BOTH TURSO CLOUD AND CLOUDINARY ENVIRONMENT VARIABLES TO ENABLE ONE-CLICK CLOUD MIGRATION.
+                </div>
+              ) : syncStats.fullySynchronized ? (
+                <div className="border border-black bg-black text-white px-4 py-3.5 font-mono text-[11px] tracking-[0.08em] uppercase flex items-center gap-2.5">
+                  <Check className="w-4 h-4 shrink-0" strokeWidth={1.75} />
+                  <span>
+                    100% SYNCHRONIZED — ALL ASSETS ARE ON CLOUDINARY AND ALL TABLES ARE UP TO DATE IN TURSO CLOUD.
+                  </span>
+                </div>
+              ) : null}
+
+              {lastMigrationSummary && (
+                <p className="font-mono text-[11px] tracking-[0.06em] uppercase text-[#262626] border-l-2 border-black pl-3">
+                  {lastMigrationSummary}
+                </p>
+              )}
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  disabled={!canMigrate}
+                  onClick={() => void handleMigrateToCloud()}
+                  className="w-full inline-flex items-center justify-center gap-2.5 border border-black bg-black text-white py-4 px-6 font-mono text-[11px] tracking-[0.14em] uppercase hover:bg-black/85 transition-colors cursor-pointer disabled:bg-black/15 disabled:border-black/20 disabled:text-black/45 disabled:cursor-not-allowed"
+                >
+                  <CloudUpload className="w-4 h-4" strokeWidth={1.5} />
+                  <span>
+                    {migrating
+                      ? 'MIGRATING IMAGES TO CLOUDINARY & SYNCING TURSO...'
+                      : syncStats.fullySynchronized
+                        ? 'RE-SYNC ALL CONTENT TO TURSO & CLOUDINARY'
+                        : 'MIGRATE ALL CONTENT TO TURSO & CLOUDINARY'}
+                  </span>
+                </button>
+              </div>
+            </div>
           </section>
         )}
         </main>

@@ -3,7 +3,9 @@ import crypto from 'node:crypto';
 import {
   HERO_IMAGE,
   JOURNAL_ENTRIES,
+  MODEL_IMAGE,
   PORTFOLIO_CATEGORIES,
+  PRACTICE_IMAGE,
   PROJECTS,
   type EnquiryItem,
   type JournalEntry,
@@ -162,10 +164,19 @@ async function runSchemaAndSeed(): Promise<void> {
     )
   `);
 
-  // Idempotent seed for Hero image setting
+  // Idempotent seed for Hero, Practice, and Studio image settings
+  const nowIso = new Date().toISOString();
   await db.execute({
     sql: 'INSERT OR IGNORE INTO site_settings (key, value, updated_at) VALUES (?, ?, ?)',
-    args: ['hero_image', HERO_IMAGE, new Date().toISOString()],
+    args: ['hero_image', HERO_IMAGE, nowIso],
+  });
+  await db.execute({
+    sql: 'INSERT OR IGNORE INTO site_settings (key, value, updated_at) VALUES (?, ?, ?)',
+    args: ['practice_image', PRACTICE_IMAGE, nowIso],
+  });
+  await db.execute({
+    sql: 'INSERT OR IGNORE INTO site_settings (key, value, updated_at) VALUES (?, ?, ?)',
+    args: ['model_image', MODEL_IMAGE, nowIso],
   });
 
   // Idempotent seed for initial Portfolio Categories (only when empty)
@@ -280,6 +291,8 @@ export async function initDatabase(): Promise<void> {
 
 export async function getPublicPortfolio(): Promise<{
   heroImage: string;
+  practiceImage: string;
+  modelImage: string;
   categories: PortfolioCategoryItem[];
   projects: ProjectItem[];
   journalEntries: JournalEntry[];
@@ -287,6 +300,8 @@ export async function getPublicPortfolio(): Promise<{
   if (!isPersistenceEnabled()) {
     return {
       heroImage: HERO_IMAGE,
+      practiceImage: PRACTICE_IMAGE,
+      modelImage: MODEL_IMAGE,
       categories: PORTFOLIO_CATEGORIES,
       projects: PROJECTS,
       journalEntries: JOURNAL_ENTRIES,
@@ -296,11 +311,10 @@ export async function getPublicPortfolio(): Promise<{
   await initDatabase();
   const db = getDb();
 
-  const [heroRes, catRes, projRes, journalRes] = await Promise.all([
-    db.execute({
-      sql: 'SELECT value FROM site_settings WHERE key = ?',
-      args: ['hero_image'],
-    }),
+  const [settingsRes, catRes, projRes, journalRes] = await Promise.all([
+    db.execute(
+      "SELECT key, value FROM site_settings WHERE key IN ('hero_image', 'practice_image', 'model_image')",
+    ),
     db.execute(
       'SELECT id, code, title, category_line, meta_line, image FROM portfolio_categories ORDER BY sort_order ASC, code ASC',
     ),
@@ -308,10 +322,16 @@ export async function getPublicPortfolio(): Promise<{
     db.execute('SELECT * FROM journal_entries ORDER BY sort_order ASC'),
   ]);
 
-  const heroImage =
-    typeof heroRes.rows[0]?.value === 'string' && heroRes.rows[0].value
-      ? heroRes.rows[0].value
-      : HERO_IMAGE;
+  const settingsMap = new Map<string, string>();
+  for (const r of settingsRes.rows) {
+    if (typeof r.key === 'string' && typeof r.value === 'string' && r.value) {
+      settingsMap.set(r.key, r.value);
+    }
+  }
+
+  const heroImage = settingsMap.get('hero_image') || HERO_IMAGE;
+  const practiceImage = settingsMap.get('practice_image') || PRACTICE_IMAGE;
+  const modelImage = settingsMap.get('model_image') || MODEL_IMAGE;
 
   const categories: PortfolioCategoryItem[] = catRes.rows.map((r) => ({
     id: String(r.id),
@@ -405,18 +425,58 @@ export async function getPublicPortfolio(): Promise<{
     };
   });
 
-  return { heroImage, categories, projects, journalEntries };
+  return {
+    heroImage,
+    practiceImage,
+    modelImage,
+    categories,
+    projects,
+    journalEntries,
+  };
 }
 
-export async function updateHeroImageSetting(url: string): Promise<void> {
+export async function updateSiteImageSetting(
+  key: 'hero_image' | 'practice_image' | 'model_image',
+  url: string,
+): Promise<void> {
   await initDatabase();
   const db = getDb();
   await db.execute({
     sql: `INSERT INTO site_settings (key, value, updated_at)
           VALUES (?, ?, ?)
           ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-    args: ['hero_image', url, new Date().toISOString()],
+    args: [key, url, new Date().toISOString()],
   });
+}
+
+export async function updateHeroImageSetting(url: string): Promise<void> {
+  await updateSiteImageSetting('hero_image', url);
+}
+
+export async function syncAllToDatabase(payload: {
+  heroImage: string;
+  practiceImage: string;
+  modelImage: string;
+  categories: PortfolioCategoryItem[];
+  projects: ProjectItem[];
+  journalEntries: JournalEntry[];
+}): Promise<void> {
+  await initDatabase();
+  await Promise.all([
+    updateSiteImageSetting('hero_image', payload.heroImage),
+    updateSiteImageSetting('practice_image', payload.practiceImage),
+    updateSiteImageSetting('model_image', payload.modelImage),
+  ]);
+
+  for (let i = 0; i < payload.categories.length; i += 1) {
+    await saveCategory(payload.categories[i], i);
+  }
+  for (const project of payload.projects) {
+    await saveProject(project);
+  }
+  for (const entry of payload.journalEntries) {
+    await saveJournalEntry(entry);
+  }
 }
 
 export async function saveCategory(

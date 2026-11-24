@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { motion } from 'motion/react';
-import { PRACTICE_DISCIPLINES, PRACTICE_IMAGE } from '../data/formtectureData';
+import { PRACTICE_DISCIPLINES } from '../data/formtectureData';
+import { usePortfolioData } from '../context/PortfolioDataContext';
 import { useLanguage } from '../i18n/LanguageContext';
 import { UI_TRANSLATIONS } from '../i18n/translations';
 import { ArchitecturalImage } from './ArchitecturalImage';
@@ -9,6 +10,7 @@ import { RevealBlock, RevealLine } from './RevealText';
 
 export function PracticeSection() {
   const { language } = useLanguage();
+  const { practiceImage } = usePortfolioData();
   const t = UI_TRANSLATIONS[language].practice;
   const [openId, setOpenId] = useState<string>('sculpture');
 
@@ -57,7 +59,7 @@ export function PracticeSection() {
             <RevealBlock>
               <div className="aspect-[4/4.1] w-full overflow-hidden bg-[#F2F2F2]">
                 <ArchitecturalImage
-                  src={PRACTICE_IMAGE}
+                  src={practiceImage}
                   alt="Sculptor studio workbench with carved oak wood, granite stone and tools"
                   fallbackTitle="PRACTICE — SCULPTURE & SPACE"
                   className="w-full h-full object-cover"

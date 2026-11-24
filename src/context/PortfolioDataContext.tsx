@@ -8,7 +8,9 @@ import {
 import {
   HERO_IMAGE,
   JOURNAL_ENTRIES,
+  MODEL_IMAGE,
   PORTFOLIO_CATEGORIES,
+  PRACTICE_IMAGE,
   PROJECTS,
   type JournalEntry,
   type PortfolioCategoryItem,
@@ -17,6 +19,8 @@ import {
 
 interface PortfolioPayload {
   heroImage: string;
+  practiceImage: string;
+  modelImage: string;
   categories: PortfolioCategoryItem[];
   projects: ProjectItem[];
   journalEntries: JournalEntry[];
@@ -29,6 +33,8 @@ interface PortfolioDataContextValue extends PortfolioPayload {
 
 const DEFAULT_PAYLOAD: PortfolioPayload = {
   heroImage: HERO_IMAGE,
+  practiceImage: PRACTICE_IMAGE,
+  modelImage: MODEL_IMAGE,
   categories: PORTFOLIO_CATEGORIES,
   projects: PROJECTS,
   journalEntries: JOURNAL_ENTRIES,
@@ -59,6 +65,14 @@ export function PortfolioDataProvider({
           typeof json.heroImage === 'string' && json.heroImage
             ? json.heroImage
             : HERO_IMAGE,
+        practiceImage:
+          typeof json.practiceImage === 'string' && json.practiceImage
+            ? json.practiceImage
+            : PRACTICE_IMAGE,
+        modelImage:
+          typeof json.modelImage === 'string' && json.modelImage
+            ? json.modelImage
+            : MODEL_IMAGE,
         categories: Array.isArray(json.categories)
           ? json.categories
           : PORTFOLIO_CATEGORIES,

@@ -20,6 +20,7 @@ import {
   createSignedCloudinaryUpload,
   isCloudinaryConfigured,
   isTrustedCloudinaryUrl,
+  uploadBufferToCloudinary,
 } from './server/cloudinary.ts';
 import {
   claimInitialAdminHash,
@@ -39,6 +40,7 @@ import {
   saveCategory,
   saveJournalEntry,
   saveProject,
+  syncAllToDatabase,
   updateEnquiryStatus,
   updateHeroImageSetting,
 } from './server/db.ts';
@@ -55,6 +57,7 @@ import {
   ALLOWED_JOURNAL_CATEGORIES,
   ALLOWED_TYPOLOGIES,
   cleanString,
+  isBuiltInAssetPath,
   isSafeAssetUrl,
   isValidEmail,
   normalizeAdminPath,
@@ -329,6 +332,118 @@ app.post('/api/admin/auth/login', async (req, res) => {
 
 // --- Protected Admin Routes ---
 
+function collectPortfolioImageUrls(
+  portfolio: Awaited<ReturnType<typeof getPublicPortfolio>>,
+): string[] {
+  const urls = new Set<string>();
+  if (portfolio.heroImage) urls.add(portfolio.heroImage);
+  if (portfolio.practiceImage) urls.add(portfolio.practiceImage);
+  if (portfolio.modelImage) urls.add(portfolio.modelImage);
+  for (const cat of portfolio.categories) {
+    if (cat.image) urls.add(cat.image);
+  }
+  for (const proj of portfolio.projects) {
+    if (proj.image) urls.add(proj.image);
+    for (const g of proj.gallery) {
+      if (g) urls.add(g);
+    }
+  }
+  for (const entry of portfolio.journalEntries) {
+    if (entry.image) urls.add(entry.image);
+  }
+  return Array.from(urls);
+}
+
+function computeCloudSyncStats(
+  portfolio: Awaited<ReturnType<typeof getPublicPortfolio>>,
+) {
+  const allUrls = collectPortfolioImageUrls(portfolio);
+  const cloudinaryConfigured = isCloudinaryConfigured();
+  const tursoCloud = isTursoCloudConfigured();
+  const cloudinaryImages = cloudinaryConfigured
+    ? allUrls.filter((u) => isTrustedCloudinaryUrl(u)).length
+    : 0;
+  const totalImages = allUrls.length;
+  const remainingLocalAssets = totalImages - cloudinaryImages;
+  const syncedPercent =
+    totalImages === 0
+      ? 100
+      : Math.round((cloudinaryImages / totalImages) * 100);
+
+  return {
+    totalImages,
+    cloudinaryImages,
+    remainingLocalAssets,
+    syncedPercent,
+    readyToMigrate: tursoCloud && cloudinaryConfigured,
+    fullySynchronized:
+      tursoCloud && cloudinaryConfigured && remainingLocalAssets === 0,
+  };
+}
+
+function resolveSelfOrigin(req: Request): string {
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  const proto =
+    typeof forwardedProto === 'string' && forwardedProto === 'https'
+      ? 'https'
+      : req.protocol === 'https'
+        ? 'https'
+        : 'http';
+
+  const rawHost =
+    (typeof req.headers['x-forwarded-host'] === 'string'
+      ? req.headers['x-forwarded-host']
+      : req.headers.host) || '';
+
+  if (/^[a-zA-Z0-9.-]+(:\d{1,5})?$/.test(rawHost)) {
+    return `${proto}://${rawHost}`;
+  }
+  return resolveBaseUrl(req);
+}
+
+async function loadBuiltInAssetBuffer(
+  assetPath: string,
+  selfOrigin: string,
+): Promise<Buffer> {
+  if (!isBuiltInAssetPath(assetPath)) {
+    throw new Error(`Unsupported local asset path: ${assetPath}`);
+  }
+
+  const candidateRoots: Array<{ prefix: string; baseDir: string }> = [
+    { prefix: '/assets/', baseDir: path.resolve(process.cwd(), 'public', 'assets') },
+    { prefix: '/assets/', baseDir: path.resolve(process.cwd(), 'dist', 'assets') },
+    { prefix: '/src/assets/', baseDir: path.resolve(process.cwd(), 'src', 'assets') },
+    { prefix: '/src/assets/', baseDir: path.resolve(process.cwd(), 'dist', 'src', 'assets') },
+  ];
+
+  for (const { prefix, baseDir } of candidateRoots) {
+    if (!assetPath.startsWith(prefix)) continue;
+    const rel = assetPath.slice(prefix.length);
+    const resolved = path.resolve(baseDir, rel);
+    if (!resolved.startsWith(baseDir + path.sep)) continue;
+    try {
+      return await fs.readFile(resolved);
+    } catch {
+      // Try next filesystem candidate or CDN fallback below
+    }
+  }
+
+  // On Vercel serverless, static files are served by CDN on the deployment host
+  const fetchRes = await fetch(`${selfOrigin}${assetPath}`);
+  if (!fetchRes.ok) {
+    throw new Error(`Failed to fetch built-in asset: ${assetPath}`);
+  }
+  const contentType = fetchRes.headers.get('content-type') || '';
+  if (!contentType.startsWith('image/')) {
+    throw new Error(`Unexpected asset content type for: ${assetPath}`);
+  }
+  const arr = await fetchRes.arrayBuffer();
+  if (arr.byteLength > 10 * 1024 * 1024) {
+    throw new Error(`Asset exceeds max migration size: ${assetPath}`);
+  }
+  return Buffer.from(arr);
+}
+
 app.get('/api/admin/status', requireAdmin, async (_req, res) => {
   try {
     const portfolio = await getPublicPortfolio();
@@ -337,7 +452,9 @@ app.get('/api/admin/status', requireAdmin, async (_req, res) => {
       tursoCloud: isTursoCloudConfigured(),
       persistenceEnabled: isPersistenceEnabled(),
       cloudinaryConfigured: isCloudinaryConfigured(),
+      sync: computeCloudSyncStats(portfolio),
       counts: {
+        siteImages: 3,
         categories: portfolio.categories.length,
         projects: portfolio.projects.length,
         journal: portfolio.journalEntries.length,
@@ -347,6 +464,97 @@ app.get('/api/admin/status', requireAdmin, async (_req, res) => {
     });
   } catch (err) {
     handleRouteError(res, err, 'Unable to load admin status.');
+  }
+});
+
+// Full 100% Migration & Sync to Cloudinary + Turso Cloud
+app.post('/api/admin/migrate', requireAdmin, async (req, res) => {
+  if (!isTursoCloudConfigured() || !isCloudinaryConfigured()) {
+    res.status(503).json({
+      error:
+        'Migration is disabled until both Turso Cloud and Cloudinary are connected.',
+    });
+    return;
+  }
+
+  try {
+    await initDatabase();
+    const current = await getPublicPortfolio();
+    const selfOrigin = resolveSelfOrigin(req);
+    const allUrls = collectPortfolioImageUrls(current);
+    const urlMap = new Map<string, string>();
+    const pendingBuiltIn: string[] = [];
+
+    for (const url of allUrls) {
+      if (isTrustedCloudinaryUrl(url)) {
+        urlMap.set(url, url);
+      } else if (isBuiltInAssetPath(url)) {
+        pendingBuiltIn.push(url);
+      }
+    }
+
+    // Upload unique built-in assets in bounded batches of 4
+    let imagesUploaded = 0;
+    const BATCH_SIZE = 4;
+    for (let i = 0; i < pendingBuiltIn.length; i += BATCH_SIZE) {
+      const batch = pendingBuiltIn.slice(i, i + BATCH_SIZE);
+      const uploadedBatch = await Promise.all(
+        batch.map(async (assetPath) => {
+          const buffer = await loadBuiltInAssetBuffer(assetPath, selfOrigin);
+          const fileBase = path.basename(assetPath, path.extname(assetPath));
+          const secureUrl = await uploadBufferToCloudinary(buffer, fileBase);
+          return { assetPath, secureUrl };
+        }),
+      );
+      for (const item of uploadedBatch) {
+        urlMap.set(item.assetPath, item.secureUrl);
+        imagesUploaded += 1;
+      }
+    }
+
+    const resolveMigrated = (raw: string): string => urlMap.get(raw) ?? raw;
+
+    const updatedPayload = {
+      heroImage: resolveMigrated(current.heroImage),
+      practiceImage: resolveMigrated(current.practiceImage),
+      modelImage: resolveMigrated(current.modelImage),
+      categories: current.categories.map((cat) => ({
+        ...cat,
+        image: resolveMigrated(cat.image),
+      })),
+      projects: current.projects.map((proj) => ({
+        ...proj,
+        image: resolveMigrated(proj.image),
+        gallery: [
+          resolveMigrated(proj.gallery[0]),
+          resolveMigrated(proj.gallery[1]),
+          resolveMigrated(proj.gallery[2]),
+        ] as [string, string, string],
+      })),
+      journalEntries: current.journalEntries.map((entry) => ({
+        ...entry,
+        image: resolveMigrated(entry.image),
+      })),
+    };
+
+    await syncAllToDatabase(updatedPayload);
+
+    const verified = await getPublicPortfolio();
+    const sync = computeCloudSyncStats(verified);
+
+    res.json({
+      ok: true,
+      imagesUploaded,
+      sync,
+      counts: {
+        siteImages: 3,
+        categories: verified.categories.length,
+        projects: verified.projects.length,
+        journal: verified.journalEntries.length,
+      },
+    });
+  } catch (err) {
+    handleRouteError(res, err, 'Cloud migration failed. Please try again.');
   }
 });
 

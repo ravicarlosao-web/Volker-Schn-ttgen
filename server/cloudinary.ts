@@ -73,3 +73,52 @@ export function isTrustedCloudinaryUrl(rawUrl: string): boolean {
     return false;
   }
 }
+
+/**
+ * Uploads an image Buffer directly to Cloudinary using a deterministic public_id
+ * under volker-schnuettgen/migrated so repeated migration clicks remain idempotent.
+ */
+export async function uploadBufferToCloudinary(
+  buffer: Buffer,
+  publicIdSlug: string,
+): Promise<string> {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim();
+  const apiKey = process.env.CLOUDINARY_API_KEY?.trim();
+  const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim();
+
+  if (!cloudName || !apiKey || !apiSecret) {
+    throw new Error('CLOUDINARY_NOT_CONFIGURED');
+  }
+
+  cloudinary.config({
+    cloud_name: cloudName,
+    api_key: apiKey,
+    api_secret: apiSecret,
+    secure: true,
+  });
+
+  const safeSlug = publicIdSlug
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 120);
+
+  return new Promise<string>((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: `${CLOUDINARY_FOLDER}/migrated`,
+        public_id: safeSlug || 'asset',
+        overwrite: false,
+        unique_filename: false,
+        resource_type: 'image',
+      },
+      (error, result) => {
+        if (error || !result?.secure_url) {
+          reject(error || new Error('Cloudinary upload failed'));
+          return;
+        }
+        resolve(result.secure_url);
+      },
+    );
+    stream.end(buffer);
+  });
+}

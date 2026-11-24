@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { motion, useScroll, useTransform } from 'motion/react';
-import { MODEL_IMAGE, STUDIO_STATS } from '../data/formtectureData';
+import { STUDIO_STATS } from '../data/formtectureData';
+import { usePortfolioData } from '../context/PortfolioDataContext';
 import { useLanguage } from '../i18n/LanguageContext';
 import { getLocalizedStudioStats, UI_TRANSLATIONS } from '../i18n/translations';
 import { ArchitecturalImage } from './ArchitecturalImage';
@@ -8,6 +9,7 @@ import { CountUpStat, RevealBlock, RevealLine } from './RevealText';
 
 export function StudioSection() {
   const { language } = useLanguage();
+  const { modelImage } = usePortfolioData();
   const t = UI_TRANSLATIONS[language].studio;
   const localizedStats = getLocalizedStudioStats(STUDIO_STATS, language);
 
@@ -104,7 +106,7 @@ export function StudioSection() {
             {/* Centered Scale Study Image */}
             <div className="absolute inset-0 flex items-center justify-center px-[16%]">
               <ArchitecturalImage
-                src={MODEL_IMAGE}
+                src={modelImage}
                 alt="Volker Schnüttgen studio scale and spatial model study in Sintra"
                 fallbackTitle="VOLKER SCHNÜTTGEN — SINTRA STUDIO"
                 className="w-full h-full object-cover"
