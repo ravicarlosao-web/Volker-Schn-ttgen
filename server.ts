@@ -92,9 +92,14 @@ app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
 // Baseline security headers for Express responses
-app.use((_req, res, next) => {
+app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader(
+    'Referrer-Policy',
+    req.path.startsWith('/api/admin')
+      ? 'no-referrer'
+      : 'strict-origin-when-cross-origin',
+  );
   next();
 });
 

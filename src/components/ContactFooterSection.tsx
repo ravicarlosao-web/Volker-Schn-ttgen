@@ -347,39 +347,10 @@ export function ContactFooterSection({
                     )}
                   </button>
                 </RevealLine>
-
-                <RevealLine delay={0.08}>
-                  <a
-                    href="tel:+351962370193"
-                    className="inline-flex items-center gap-2.5 pb-1.5 border-b border-black/30 font-mono text-[12px] tracking-[0.06em] uppercase text-black hover:border-black transition-colors tabular-nums"
-                  >
-                    <span>+351 962 370 193</span>
-                    <ArrowUpRight className="w-3.5 h-3.5 text-[#666666] shrink-0" strokeWidth={1.25} />
-                  </a>
-                </RevealLine>
               </div>
             </div>
 
-            {/* Block 2: Gallery Representation */}
-            <div className="border-t border-black/20 pt-5">
-              <RevealLine delay={0.06}>
-                <span className="block font-mono text-[10px] tracking-[0.14em] uppercase text-[#666666]">
-                  {t.representationLabel}
-                </span>
-              </RevealLine>
-
-              <RevealBlock delay={0.1} className="mt-4">
-                <p className="inline-flex items-center gap-2.5 pb-1.5 border-b border-black/30 font-mono text-[12px] tracking-[0.06em] uppercase text-black">
-                  <span>ZET GALLERY</span>
-                  <ArrowUpRight className="w-3.5 h-3.5 text-[#666666] shrink-0" strokeWidth={1.25} />
-                </p>
-                <p className="mt-2.5 text-[14px] text-[#595959]">
-                  {t.representationRole}
-                </p>
-              </RevealBlock>
-            </div>
-
-            {/* Block 3: Studio */}
+            {/* Block 2: Studio */}
             <div className="border-t border-black/20 pt-5">
               <RevealLine delay={0.08}>
                 <span className="block font-mono text-[10px] tracking-[0.14em] uppercase text-[#666666]">
