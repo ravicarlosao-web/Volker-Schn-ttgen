@@ -45,7 +45,7 @@ import {
   saveProject,
   syncAllToDatabase,
   updateEnquiryStatus,
-  updateHeroImageSetting,
+  updateHeroImagesSetting,
   updateSiteImageSetting,
 } from './server/db.ts';
 import {
@@ -343,6 +343,9 @@ function collectPortfolioImageUrls(
   portfolio: Awaited<ReturnType<typeof getPublicPortfolio>>,
 ): string[] {
   const urls = new Set<string>();
+  for (const h of portfolio.heroImages) {
+    if (h) urls.add(h);
+  }
   if (portfolio.heroImage) urls.add(portfolio.heroImage);
   if (portfolio.practiceImage) urls.add(portfolio.practiceImage);
   if (portfolio.modelImage) urls.add(portfolio.modelImage);
@@ -461,7 +464,7 @@ app.get('/api/admin/status', requireAdmin, async (_req, res) => {
       cloudinaryConfigured: isCloudinaryConfigured(),
       sync: computeCloudSyncStats(portfolio),
       counts: {
-        siteImages: 3,
+        siteImages: portfolio.heroImages.length + 2,
         categories: portfolio.categories.length,
         projects: portfolio.projects.length,
         journal: portfolio.journalEntries.length,
@@ -520,9 +523,11 @@ app.post('/api/admin/migrate', requireAdmin, async (req, res) => {
     }
 
     const resolveMigrated = (raw: string): string => urlMap.get(raw) ?? raw;
+    const migratedHeroImages = current.heroImages.map(resolveMigrated);
 
     const updatedPayload = {
-      heroImage: resolveMigrated(current.heroImage),
+      heroImage: migratedHeroImages[0] || resolveMigrated(current.heroImage),
+      heroImages: migratedHeroImages,
       practiceImage: resolveMigrated(current.practiceImage),
       modelImage: resolveMigrated(current.modelImage),
       categories: current.categories.map((cat) => ({
@@ -554,7 +559,7 @@ app.post('/api/admin/migrate', requireAdmin, async (req, res) => {
       imagesUploaded,
       sync,
       counts: {
-        siteImages: 3,
+        siteImages: verified.heroImages.length + 2,
         categories: verified.categories.length,
         projects: verified.projects.length,
         journal: verified.journalEntries.length,
@@ -604,12 +609,30 @@ app.post('/api/admin/upload/verify', requireAdmin, (req, res) => {
 app.put('/api/admin/hero', requireAdmin, async (req, res) => {
   if (!ensureDatabaseAvailable(res)) return;
   try {
-    const heroImage = cleanString(req.body?.heroImage, 1200);
+    const rawHeroImages = Array.isArray(req.body?.heroImages)
+      ? (req.body.heroImages as unknown[])
+          .map((u) => cleanString(u, 1200))
+          .filter(Boolean)
+          .slice(0, 8)
+      : [];
+    const fallbackHeroImage = cleanString(req.body?.heroImage, 1200);
+    const heroImages =
+      rawHeroImages.length > 0
+        ? rawHeroImages
+        : fallbackHeroImage
+          ? [fallbackHeroImage]
+          : [];
+
     const practiceImage = cleanString(req.body?.practiceImage, 1200);
     const modelImage = cleanString(req.body?.modelImage, 1200);
 
-    if (!isSafeAssetUrl(heroImage)) {
-      res.status(400).json({ error: 'Please provide a valid Hero image URL.' });
+    if (
+      heroImages.length === 0 ||
+      heroImages.some((img) => !isSafeAssetUrl(img))
+    ) {
+      res
+        .status(400)
+        .json({ error: 'Please provide valid Hero slideshow image URLs.' });
       return;
     }
     if (practiceImage && !isSafeAssetUrl(practiceImage)) {
@@ -625,7 +648,7 @@ app.put('/api/admin/hero', requireAdmin, async (req, res) => {
       return;
     }
 
-    await updateHeroImageSetting(heroImage);
+    await updateHeroImagesSetting(heroImages);
     if (practiceImage) {
       await updateSiteImageSetting('practice_image', practiceImage);
     }
@@ -634,12 +657,13 @@ app.put('/api/admin/hero', requireAdmin, async (req, res) => {
     }
     res.json({
       ok: true,
-      heroImage,
+      heroImage: heroImages[0],
+      heroImages,
       ...(practiceImage ? { practiceImage } : {}),
       ...(modelImage ? { modelImage } : {}),
     });
   } catch (err) {
-    handleRouteError(res, err, 'Unable to update Hero image.');
+    handleRouteError(res, err, 'Unable to update Hero images.');
   }
 });
 

@@ -2,6 +2,7 @@ import { createClient, type Client } from '@libsql/client';
 import crypto from 'node:crypto';
 import {
   HERO_IMAGE,
+  HERO_IMAGES,
   JOURNAL_ENTRIES,
   MODEL_IMAGE,
   PORTFOLIO_CATEGORIES,
@@ -178,8 +179,26 @@ async function runSchemaAndSeed(): Promise<void> {
     )
   `);
 
-  // Idempotent seed for Hero, Practice, and Studio image settings
+  // Idempotent seed for Hero slideshow, Practice, and Studio image settings
   const nowIso = new Date().toISOString();
+  const existingHeroSlidesRes = await db.execute({
+    sql: "SELECT value FROM site_settings WHERE key = 'hero_images' LIMIT 1",
+    args: [],
+  });
+  if (existingHeroSlidesRes.rows.length === 0) {
+    await db.execute({
+      sql: 'INSERT OR IGNORE INTO site_settings (key, value, updated_at) VALUES (?, ?, ?)',
+      args: ['hero_images', JSON.stringify(HERO_IMAGES), nowIso],
+    });
+    // Upgrade legacy default hero_image to new slider_01 if it was never customized
+    await db.execute({
+      sql: `UPDATE site_settings
+            SET value = ?, updated_at = ?
+            WHERE key = 'hero_image'
+              AND value = '/src/assets/images/color_hero_oak_stone_1795365610296.jpg'`,
+      args: [HERO_IMAGES[0], nowIso],
+    });
+  }
   await db.execute({
     sql: 'INSERT OR IGNORE INTO site_settings (key, value, updated_at) VALUES (?, ?, ?)',
     args: ['hero_image', HERO_IMAGE, nowIso],
@@ -325,6 +344,7 @@ export async function initDatabase(): Promise<void> {
 
 export async function getPublicPortfolio(): Promise<{
   heroImage: string;
+  heroImages: string[];
   practiceImage: string;
   modelImage: string;
   categories: PortfolioCategoryItem[];
@@ -334,6 +354,7 @@ export async function getPublicPortfolio(): Promise<{
   if (!isPersistenceEnabled()) {
     return {
       heroImage: HERO_IMAGE,
+      heroImages: HERO_IMAGES,
       practiceImage: PRACTICE_IMAGE,
       modelImage: MODEL_IMAGE,
       categories: PORTFOLIO_CATEGORIES,
@@ -362,7 +383,7 @@ export async function getPublicPortfolio(): Promise<{
 
   const [settingsRes, catRes, projRes, journalRes] = await Promise.all([
     db.execute(
-      "SELECT key, value FROM site_settings WHERE key IN ('hero_image', 'practice_image', 'model_image')",
+      "SELECT key, value FROM site_settings WHERE key IN ('hero_image', 'hero_images', 'practice_image', 'model_image')",
     ),
     db.execute(
       'SELECT id, code, title, category_line, meta_line, image, translations_json FROM portfolio_categories ORDER BY sort_order ASC, code ASC',
@@ -378,7 +399,27 @@ export async function getPublicPortfolio(): Promise<{
     }
   }
 
-  const heroImage = settingsMap.get('hero_image') || HERO_IMAGE;
+  let heroImages: string[] = [];
+  const rawHeroSlides = settingsMap.get('hero_images');
+  if (rawHeroSlides) {
+    try {
+      const parsed = JSON.parse(rawHeroSlides) as unknown;
+      if (Array.isArray(parsed)) {
+        heroImages = parsed.filter(
+          (u): u is string => typeof u === 'string' && u.trim().length > 0,
+        );
+      }
+    } catch {
+      // fallback below
+    }
+  }
+
+  const singleHeroSetting = settingsMap.get('hero_image');
+  if (heroImages.length === 0) {
+    heroImages = singleHeroSetting ? [singleHeroSetting] : HERO_IMAGES;
+  }
+
+  const heroImage = heroImages[0] || singleHeroSetting || HERO_IMAGE;
   const practiceImage = settingsMap.get('practice_image') || PRACTICE_IMAGE;
   const modelImage = settingsMap.get('model_image') || MODEL_IMAGE;
 
@@ -492,6 +533,7 @@ export async function getPublicPortfolio(): Promise<{
 
   return {
     heroImage,
+    heroImages,
     practiceImage,
     modelImage,
     categories,
@@ -501,7 +543,7 @@ export async function getPublicPortfolio(): Promise<{
 }
 
 export async function updateSiteImageSetting(
-  key: 'hero_image' | 'practice_image' | 'model_image',
+  key: 'hero_image' | 'hero_images' | 'practice_image' | 'model_image',
   url: string,
 ): Promise<void> {
   await initDatabase();
@@ -514,12 +556,22 @@ export async function updateSiteImageSetting(
   });
 }
 
+export async function updateHeroImagesSetting(urls: string[]): Promise<void> {
+  const cleaned = urls.map((u) => u.trim()).filter(Boolean);
+  const effective = cleaned.length > 0 ? cleaned : HERO_IMAGES;
+  await Promise.all([
+    updateSiteImageSetting('hero_images', JSON.stringify(effective)),
+    updateSiteImageSetting('hero_image', effective[0] || HERO_IMAGE),
+  ]);
+}
+
 export async function updateHeroImageSetting(url: string): Promise<void> {
-  await updateSiteImageSetting('hero_image', url);
+  await updateHeroImagesSetting([url]);
 }
 
 export async function syncAllToDatabase(payload: {
   heroImage: string;
+  heroImages?: string[];
   practiceImage: string;
   modelImage: string;
   categories: PortfolioCategoryItem[];
@@ -527,8 +579,12 @@ export async function syncAllToDatabase(payload: {
   journalEntries: JournalEntry[];
 }): Promise<void> {
   await initDatabase();
+  const resolvedHeroImages =
+    payload.heroImages && payload.heroImages.length > 0
+      ? payload.heroImages
+      : [payload.heroImage];
   await Promise.all([
-    updateSiteImageSetting('hero_image', payload.heroImage),
+    updateHeroImagesSetting(resolvedHeroImages),
     updateSiteImageSetting('practice_image', payload.practiceImage),
     updateSiteImageSetting('model_image', payload.modelImage),
   ]);

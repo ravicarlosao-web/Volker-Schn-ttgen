@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
   ArrowUpRight,
   Check,
   CloudUpload,
@@ -358,7 +360,7 @@ function hasJournalLocale(entry: JournalEntry, loc: ContentLocale): boolean {
 
 export function AdminPage({ onExit }: AdminPageProps) {
   const {
-    heroImage: liveHeroImage,
+    heroImages: liveHeroImages,
     practiceImage: livePracticeImage,
     modelImage: liveModelImage,
     categories,
@@ -383,7 +385,7 @@ export function AdminPage({ onExit }: AdminPageProps) {
       fullySynchronized: false,
     },
     counts: {
-      siteImages: 3,
+      siteImages: 6,
       categories: 0,
       projects: 0,
       journal: 0,
@@ -416,7 +418,7 @@ export function AdminPage({ onExit }: AdminPageProps) {
   const journalFormRef = useRef<HTMLFormElement | null>(null);
 
   // Hero & Site images state
-  const [heroDraft, setHeroDraft] = useState(liveHeroImage);
+  const [heroDrafts, setHeroDrafts] = useState<string[]>(liveHeroImages);
   const [practiceDraft, setPracticeDraft] = useState(livePracticeImage);
   const [modelDraft, setModelDraft] = useState(liveModelImage);
   const [heroSaving, setHeroSaving] = useState(false);
@@ -463,8 +465,8 @@ export function AdminPage({ onExit }: AdminPageProps) {
   }, []);
 
   useEffect(() => {
-    setHeroDraft(liveHeroImage);
-  }, [liveHeroImage]);
+    setHeroDrafts(liveHeroImages);
+  }, [liveHeroImages]);
 
   useEffect(() => {
     setPracticeDraft(livePracticeImage);
@@ -753,8 +755,9 @@ export function AdminPage({ onExit }: AdminPageProps) {
 
   const handleSaveHero = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!heroDraft.trim()) {
-      notify('err', 'Please upload a Hero image before saving.');
+    const validHeroImages = heroDrafts.map((u) => u.trim()).filter(Boolean);
+    if (validHeroImages.length === 0) {
+      notify('err', 'Please upload at least one Hero slideshow image before saving.');
       return;
     }
     setHeroSaving(true);
@@ -762,7 +765,8 @@ export function AdminPage({ onExit }: AdminPageProps) {
       const res = await adminFetch('/api/admin/hero', {
         method: 'PUT',
         body: JSON.stringify({
-          heroImage: heroDraft.trim(),
+          heroImage: validHeroImages[0],
+          heroImages: validHeroImages,
           practiceImage: practiceDraft.trim() || undefined,
           modelImage: modelDraft.trim() || undefined,
         }),
@@ -774,7 +778,7 @@ export function AdminPage({ onExit }: AdminPageProps) {
       }
       await refreshPortfolio();
       await refreshAdminStatus();
-      notify('ok', 'Site images saved to database.');
+      notify('ok', 'Hero slideshow and studio images saved to database.');
     } catch {
       notify('err', 'Network error saving site images.');
     } finally {
@@ -2060,14 +2064,103 @@ export function AdminPage({ onExit }: AdminPageProps) {
               onSubmit={handleSaveHero}
               className="space-y-8 border border-black/20 p-6 sm:p-8"
             >
-              <ImageField
-                label="HERO FULL-BLEED PHOTOGRAPH"
-                value={heroDraft}
-                onChange={setHeroDraft}
-                onUploadFile={handleUploadImage}
-                cloudinaryConfigured={cloudinaryConfigured}
-                previewAspect="aspect-[16/9]"
-              />
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <span className="block font-mono text-[10px] tracking-[0.14em] uppercase text-[#666666]">
+                      FLUID CROSSFADE SEQUENCE ({heroDrafts.length} SLIDE{heroDrafts.length === 1 ? '' : 'S'})
+                    </span>
+                    <p className="mt-1 text-[13px] text-[#595959]">
+                      Images fade smoothly in sequence across the landing Hero frame.
+                    </p>
+                  </div>
+                  {heroDrafts.length < 8 && (
+                    <button
+                      type="button"
+                      onClick={() => setHeroDrafts((prev) => [...prev, ''])}
+                      className="inline-flex items-center gap-1.5 border border-black px-3 py-2 font-mono text-[10px] tracking-[0.12em] uppercase hover:bg-black hover:text-white transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>ADD SLIDE</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {heroDrafts.map((slideUrl, idx) => (
+                    <div
+                      key={`hero-slide-${idx}`}
+                      className="border border-black/15 p-4 bg-[#fafafa] space-y-3"
+                    >
+                      <div className="flex items-center justify-between gap-2 pb-2 border-b border-black/10">
+                        <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-black font-medium">
+                          HERO SLIDE {String(idx + 1).padStart(2, '0')}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={() =>
+                              setHeroDrafts((prev) => {
+                                if (idx === 0) return prev;
+                                const next = [...prev];
+                                [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                                return next;
+                              })
+                            }
+                            aria-label={`Move slide ${idx + 1} earlier`}
+                            className="p-1.5 border border-black/20 bg-white hover:border-black disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                          >
+                            <ArrowUp className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === heroDrafts.length - 1}
+                            onClick={() =>
+                              setHeroDrafts((prev) => {
+                                if (idx >= prev.length - 1) return prev;
+                                const next = [...prev];
+                                [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]];
+                                return next;
+                              })
+                            }
+                            aria-label={`Move slide ${idx + 1} later`}
+                            className="p-1.5 border border-black/20 bg-white hover:border-black disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                          >
+                            <ArrowDown className="w-3 h-3" />
+                          </button>
+                          {heroDrafts.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setHeroDrafts((prev) => prev.filter((_, i) => i !== idx))
+                              }
+                              aria-label={`Remove slide ${idx + 1}`}
+                              className="p-1.5 border border-black/20 bg-white text-red-700 hover:border-red-700 cursor-pointer"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <ImageField
+                        label={`SLIDE ${String(idx + 1).padStart(2, '0')} IMAGE`}
+                        value={slideUrl}
+                        onChange={(val) =>
+                          setHeroDrafts((prev) => {
+                            const next = [...prev];
+                            next[idx] = val;
+                            return next;
+                          })
+                        }
+                        onUploadFile={handleUploadImage}
+                        cloudinaryConfigured={cloudinaryConfigured}
+                        previewAspect="aspect-[16/10]"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-black/15">
                 <ImageField
@@ -2092,7 +2185,7 @@ export function AdminPage({ onExit }: AdminPageProps) {
                 <button
                   type="button"
                   onClick={() => {
-                    setHeroDraft(liveHeroImage);
+                    setHeroDrafts(liveHeroImages);
                     setPracticeDraft(livePracticeImage);
                     setModelDraft(liveModelImage);
                   }}

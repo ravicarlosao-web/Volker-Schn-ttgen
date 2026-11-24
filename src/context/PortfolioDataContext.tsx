@@ -7,6 +7,7 @@ import {
 } from 'react';
 import {
   HERO_IMAGE,
+  HERO_IMAGES,
   JOURNAL_ENTRIES,
   MODEL_IMAGE,
   PORTFOLIO_CATEGORIES,
@@ -19,6 +20,7 @@ import {
 
 interface PortfolioPayload {
   heroImage: string;
+  heroImages: string[];
   practiceImage: string;
   modelImage: string;
   categories: PortfolioCategoryItem[];
@@ -33,6 +35,7 @@ interface PortfolioDataContextValue extends PortfolioPayload {
 
 const DEFAULT_PAYLOAD: PortfolioPayload = {
   heroImage: HERO_IMAGE,
+  heroImages: HERO_IMAGES,
   practiceImage: PRACTICE_IMAGE,
   modelImage: MODEL_IMAGE,
   categories: PORTFOLIO_CATEGORIES,
@@ -60,11 +63,21 @@ export function PortfolioDataProvider({
       const res = await fetch('/api/portfolio', { cache: 'no-store' });
       if (!res.ok) return;
       const json = (await res.json()) as Partial<PortfolioPayload>;
+      const resolvedHeroImages = Array.isArray(json.heroImages)
+        ? json.heroImages.filter(
+            (u): u is string => typeof u === 'string' && u.trim().length > 0,
+          )
+        : [];
+      const fallbackSingleHero =
+        typeof json.heroImage === 'string' && json.heroImage
+          ? json.heroImage
+          : HERO_IMAGE;
+      const heroImages =
+        resolvedHeroImages.length > 0 ? resolvedHeroImages : [fallbackSingleHero];
+
       setData({
-        heroImage:
-          typeof json.heroImage === 'string' && json.heroImage
-            ? json.heroImage
-            : HERO_IMAGE,
+        heroImage: heroImages[0] || fallbackSingleHero,
+        heroImages,
         practiceImage:
           typeof json.practiceImage === 'string' && json.practiceImage
             ? json.practiceImage

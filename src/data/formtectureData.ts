@@ -125,7 +125,14 @@ export interface JournalEntry {
   translations?: Partial<Record<ContentLocale, JournalTranslation>>;
 }
 
-export const HERO_IMAGE = '/src/assets/images/color_hero_oak_stone_1795365610296.jpg';
+export const HERO_IMAGES: string[] = [
+  '/assets/aistudio/slider_01_95d9ad15.jpg',
+  '/assets/aistudio/slider_02_8fd2adff.jpg',
+  '/assets/aistudio/slider_03_3c3f44fb.jpg',
+  '/assets/aistudio/slider_04_4f53d0ea.jpg',
+];
+
+export const HERO_IMAGE = HERO_IMAGES[0];
 export const PRACTICE_IMAGE = '/src/assets/images/color_practice_studio_1795365610802.jpg';
 export const MODEL_IMAGE = '/src/assets/images/color_studio_sintra_1795365610011.jpg';
 
