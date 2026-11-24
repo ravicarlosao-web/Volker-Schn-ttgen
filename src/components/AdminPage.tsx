@@ -28,14 +28,13 @@ type AdminTab = 'hero' | 'categories' | 'works' | 'journal' | 'enquiries';
 interface AuthStatusResponse {
   adminEnabled?: boolean;
   disabledReason?: string | null;
-  envPasscodeConfigured: boolean;
   needsSetup: boolean;
-  setupAllowed?: boolean;
-  storage: {
-    tursoCloud: boolean;
-    persistenceEnabled?: boolean;
-    cloudinaryConfigured: boolean;
-  };
+}
+
+interface AdminStorageState {
+  tursoCloud: boolean;
+  persistenceEnabled: boolean;
+  cloudinaryConfigured: boolean;
 }
 
 interface ImageFieldProps {
@@ -229,6 +228,11 @@ export function AdminPage({ onExit }: AdminPageProps) {
   // Bearer token held strictly in React state (never localStorage/sessionStorage)
   const [token, setToken] = useState<string | null>(null);
   const [authStatus, setAuthStatus] = useState<AuthStatusResponse | null>(null);
+  const [adminStorage, setAdminStorage] = useState<AdminStorageState>({
+    tursoCloud: false,
+    persistenceEnabled: true,
+    cloudinaryConfigured: false,
+  });
   const [authLoading, setAuthLoading] = useState(true);
 
   // Login / First-run setup form
@@ -322,14 +326,27 @@ export function AdminPage({ onExit }: AdminPageProps) {
     [token, notify],
   );
 
-  const fetchEnquiries = useCallback(async () => {
+  const fetchAdminStatusAndEnquiries = useCallback(async () => {
     if (!token) return;
-    if (authStatus && authStatus.storage.persistenceEnabled === false) {
-      setEnquiries([]);
-      return;
-    }
     setEnquiriesLoading(true);
     try {
+      const statusRes = await adminFetch('/api/admin/status');
+      let canPersist = true;
+      if (statusRes.ok) {
+        const statusJson = (await statusRes.json()) as Partial<AdminStorageState>;
+        canPersist = statusJson.persistenceEnabled ?? true;
+        setAdminStorage({
+          tursoCloud: Boolean(statusJson.tursoCloud),
+          persistenceEnabled: canPersist,
+          cloudinaryConfigured: Boolean(statusJson.cloudinaryConfigured),
+        });
+      }
+
+      if (!canPersist) {
+        setEnquiries([]);
+        return;
+      }
+
       const res = await adminFetch('/api/admin/enquiries');
       if (res.ok) {
         const json = (await res.json()) as { enquiries?: EnquiryItem[] };
@@ -342,13 +359,15 @@ export function AdminPage({ onExit }: AdminPageProps) {
     } finally {
       setEnquiriesLoading(false);
     }
-  }, [token, authStatus, adminFetch, notify]);
+  }, [token, adminFetch, notify]);
+
+  const fetchEnquiries = fetchAdminStatusAndEnquiries;
 
   useEffect(() => {
     if (token) {
-      void fetchEnquiries();
+      void fetchAdminStatusAndEnquiries();
     }
-  }, [token, fetchEnquiries]);
+  }, [token, fetchAdminStatusAndEnquiries]);
 
   const handleUploadImage = useCallback(
     async (file: File): Promise<string | null> => {
@@ -788,9 +807,9 @@ export function AdminPage({ onExit }: AdminPageProps) {
     notify('ok', 'Enquiry deleted.');
   };
 
-  const tursoCloud = authStatus?.storage.tursoCloud ?? false;
-  const persistenceEnabled = authStatus?.storage.persistenceEnabled ?? true;
-  const cloudinaryConfigured = authStatus?.storage.cloudinaryConfigured ?? false;
+  const tursoCloud = adminStorage.tursoCloud;
+  const persistenceEnabled = adminStorage.persistenceEnabled;
+  const cloudinaryConfigured = adminStorage.cloudinaryConfigured;
   const unreadCount = enquiries.filter((e) => e.status === 'NEW').length;
 
   const filteredWorks = projects.filter((p) => {
@@ -826,18 +845,7 @@ export function AdminPage({ onExit }: AdminPageProps) {
           </button>
 
           <div className="hidden sm:flex items-center gap-5 font-mono text-[10px] tracking-[0.12em] uppercase text-[#595959]">
-            <span>
-              DB:{' '}
-              {tursoCloud
-                ? 'TURSO CLOUD'
-                : persistenceEnabled
-                  ? 'LOCAL SQLITE'
-                  : 'READ-ONLY SEED'}
-            </span>
-            <span>
-              MEDIA:{' '}
-              {cloudinaryConfigured ? 'CLOUDINARY READY' : 'CLOUDINARY MISSING'}
-            </span>
+            <span>RESTRICTED ACCESS</span>
           </div>
         </div>
 
@@ -987,7 +995,7 @@ export function AdminPage({ onExit }: AdminPageProps) {
 
         <div className="max-w-[1320px] w-full mx-auto pt-6 border-t border-black/15 flex flex-wrap justify-between gap-4 font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666]">
           <span>VOLKER SCHNÜTTGEN ARCHIVE SYSTEM</span>
-          <span>SQLITE / TURSO + CLOUDINARY MEDIA</span>
+          <span>PRIVATE ACCESS</span>
         </div>
       </div>
     );

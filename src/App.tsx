@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
-import { AdminPage } from './components/AdminPage';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { ContactFooterSection } from './components/ContactFooterSection';
 import { ElevatorSidebar } from './components/ElevatorSidebar';
 import { HeroSection } from './components/HeroSection';
 import { IntroSplash } from './components/IntroSplash';
+import { isAdminPathname } from './utils/adminRoute';
+
+const AdminPage = lazy(() =>
+  import('./components/AdminPage').then((m) => ({ default: m.AdminPage })),
+);
 import { JournalDetailPage } from './components/JournalDetailPage';
 import { JournalSection } from './components/JournalSection';
 import {
@@ -38,11 +42,11 @@ export default function App() {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [isAdminRoute, setIsAdminRoute] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
-    return window.location.pathname.startsWith('/admin');
+    return isAdminPathname(window.location.pathname);
   });
   const [showIntro, setShowIntro] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
-    if (window.location.pathname.startsWith('/admin')) return false;
+    if (isAdminPathname(window.location.pathname)) return false;
     const sp = new URLSearchParams(window.location.search);
     if (
       sp.has('work') ||
@@ -58,7 +62,7 @@ export default function App() {
 
   const syncStateFromUrl = useCallback(() => {
     if (typeof window === 'undefined') return;
-    if (window.location.pathname.startsWith('/admin')) {
+    if (isAdminPathname(window.location.pathname)) {
       setIsAdminRoute(true);
       return;
     }
@@ -121,21 +125,9 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPopState);
   }, [syncStateFromUrl]);
 
-  const openAdminPage = useCallback(() => {
-    setShowIntro(false);
-    setShowAllEntries(false);
-    setShowStartProject(false);
-    setShowPrivacy(false);
-    setIsAdminRoute(true);
-    if (!window.location.pathname.startsWith('/admin')) {
-      window.history.pushState({}, '', '/admin');
-    }
-    window.scrollTo({ top: 0, behavior: 'instant' });
-  }, []);
-
   const exitAdminPage = useCallback(() => {
     setIsAdminRoute(false);
-    if (window.location.pathname.startsWith('/admin')) {
+    if (isAdminPathname(window.location.pathname)) {
       window.history.pushState({}, '', '/');
     }
     window.scrollTo({ top: 0, behavior: 'instant' });
@@ -285,7 +277,9 @@ export default function App() {
           selectedProject={null}
           selectedEntry={null}
         />
-        <AdminPage onExit={exitAdminPage} />
+        <Suspense fallback={<div className="min-h-screen bg-white" />}>
+          <AdminPage onExit={exitAdminPage} />
+        </Suspense>
       </>
     );
   }
@@ -317,7 +311,6 @@ export default function App() {
               onSelectFloor={scrollToFloor}
               onOpenStartProject={() => setShowStartProject(true)}
               onOpenPrivacy={() => setShowPrivacy(true)}
-              onOpenAdmin={openAdminPage}
             />
           </>
         ) : selectedProject ? (
@@ -334,7 +327,6 @@ export default function App() {
               onSelectFloor={scrollToFloor}
               onOpenStartProject={() => setShowStartProject(true)}
               onOpenPrivacy={() => setShowPrivacy(true)}
-              onOpenAdmin={openAdminPage}
             />
           </>
         ) : catalogueCategory !== null ? (
@@ -355,7 +347,6 @@ export default function App() {
               onSelectFloor={scrollToFloor}
               onOpenStartProject={() => setShowStartProject(true)}
               onOpenPrivacy={() => setShowPrivacy(true)}
-              onOpenAdmin={openAdminPage}
             />
           </>
         ) : (
@@ -374,7 +365,6 @@ export default function App() {
                 onSelectFloor={scrollToFloor}
                 onOpenStartProject={() => setShowStartProject(true)}
                 onOpenPrivacy={() => setShowPrivacy(true)}
-                onOpenAdmin={openAdminPage}
               />
             </div>
           </>

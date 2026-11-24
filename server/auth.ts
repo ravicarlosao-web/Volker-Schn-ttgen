@@ -9,9 +9,14 @@ import {
   saveDbLoginAttempt,
 } from './db.ts';
 
-const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
-const MAX_LOGIN_ATTEMPTS = 5;
+const TOKEN_TTL_MS = 8 * 60 * 60 * 1000;
+const MAX_LOGIN_ATTEMPTS_PER_IP = 5;
+const MAX_LOGIN_ATTEMPTS_GLOBAL = 20;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const GLOBAL_RATE_KEY = crypto
+  .createHash('sha256')
+  .update('__global_login_rate_limit__')
+  .digest('hex');
 
 let devEphemeralSecret: string | null = null;
 const memoryLoginAttempts = new Map<
@@ -61,7 +66,7 @@ export async function getAdminAuthState(): Promise<AdminAuthState> {
     return {
       adminEnabled: false,
       disabledReason:
-        'Admin login is disabled because SESSION_SECRET is not configured in this environment.',
+        'Admin console access is currently disabled in this environment.',
       sessionSecretConfigured,
       envPasscodeConfigured,
       needsSetup: false,
@@ -82,7 +87,7 @@ export async function getAdminAuthState(): Promise<AdminAuthState> {
     return {
       adminEnabled: false,
       disabledReason:
-        'Admin login is disabled because ADMIN_PASSCODE is not configured.',
+        'Admin console access is currently disabled in this environment.',
       sessionSecretConfigured,
       envPasscodeConfigured,
       needsSetup: false,
@@ -94,7 +99,7 @@ export async function getAdminAuthState(): Promise<AdminAuthState> {
     return {
       adminEnabled: false,
       disabledReason:
-        'Admin login is disabled because neither ADMIN_PASSCODE nor a persistent database is configured.',
+        'Admin console access is currently disabled in this environment.',
       sessionSecretConfigured,
       envPasscodeConfigured,
       needsSetup: false,
@@ -112,9 +117,31 @@ export async function getAdminAuthState(): Promise<AdminAuthState> {
   };
 }
 
+/**
+ * Computes a keyed fingerprint of the active admin credential so that rotating
+ * ADMIN_PASSCODE or changing the stored credential invalidates all existing sessions.
+ */
+async function getCredentialFingerprint(secret: string): Promise<string> {
+  const envPasscode = process.env.ADMIN_PASSCODE?.trim();
+  let material = '';
+  if (envPasscode) {
+    material = `env:${envPasscode}`;
+  } else if (isPersistenceEnabled()) {
+    const dbHash = await getAdminCredentialHash();
+    material = dbHash ? `db:${dbHash}` : 'none';
+  } else {
+    material = 'none';
+  }
+  return crypto
+    .createHmac('sha256', secret)
+    .update(material)
+    .digest('hex')
+    .slice(0, 16);
+}
+
 export function verifyEnvPasscode(candidate: string): boolean {
   const expected = process.env.ADMIN_PASSCODE?.trim();
-  if (!expected) return false;
+  if (!expected || candidate.length > 256) return false;
   const a = crypto.createHash('sha256').update(candidate).digest();
   const b = crypto.createHash('sha256').update(expected).digest();
   return crypto.timingSafeEqual(a, b);
@@ -127,6 +154,7 @@ export function hashPassword(password: string): string {
 }
 
 export function verifyPasswordHash(password: string, stored: string): boolean {
+  if (password.length > 256) return false;
   const parts = stored.split(':');
   if (parts.length !== 2) return false;
   const [salt, hexHash] = parts;
@@ -143,17 +171,22 @@ export function verifyPasswordHash(password: string, stored: string): boolean {
 
 interface AdminTokenPayload {
   role: 'admin';
+  jti: string;
+  ver: string;
   exp: number;
 }
 
-export function createAdminToken(): string {
+export async function createAdminToken(): Promise<string> {
   const secret = getSessionSecret();
   if (!secret) {
     throw new Error('SESSION_SECRET_MISSING');
   }
 
+  const ver = await getCredentialFingerprint(secret);
   const payload: AdminTokenPayload = {
     role: 'admin',
+    jti: crypto.randomBytes(12).toString('hex'),
+    ver,
     exp: Date.now() + TOKEN_TTL_MS,
   };
   const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
@@ -164,9 +197,9 @@ export function createAdminToken(): string {
   return `${encoded}.${sig}`;
 }
 
-export function verifyAdminToken(token: string): boolean {
+export async function verifyAdminToken(token: string): Promise<boolean> {
   const secret = getSessionSecret();
-  if (!secret) return false;
+  if (!secret || token.length > 512) return false;
 
   const parts = token.split('.');
   if (parts.length !== 2) return false;
@@ -187,26 +220,84 @@ export function verifyAdminToken(token: string): boolean {
     const parsed = JSON.parse(
       Buffer.from(encoded, 'base64url').toString('utf8'),
     ) as AdminTokenPayload;
-    return (
-      parsed.role === 'admin' &&
-      typeof parsed.exp === 'number' &&
-      parsed.exp > Date.now()
-    );
+    if (
+      parsed.role !== 'admin' ||
+      typeof parsed.exp !== 'number' ||
+      parsed.exp <= Date.now() ||
+      typeof parsed.ver !== 'string'
+    ) {
+      return false;
+    }
+
+    const expectedVer = await getCredentialFingerprint(secret);
+    const verBuf = Buffer.from(parsed.ver);
+    const expectedVerBuf = Buffer.from(expectedVer);
+    if (verBuf.length !== expectedVerBuf.length) return false;
+    return crypto.timingSafeEqual(verBuf, expectedVerBuf);
   } catch {
     return false;
   }
 }
 
 function getClientIpHash(req: Request): string {
+  const realIp = req.headers['x-real-ip'];
   const forwarded = req.headers['x-forwarded-for'];
   const rawIp =
-    typeof forwarded === 'string'
+    (typeof realIp === 'string' && realIp.trim()) ||
+    req.ip ||
+    (typeof forwarded === 'string'
       ? forwarded.split(',')[0]?.trim()
       : Array.isArray(forwarded)
         ? forwarded[0]?.trim()
-        : undefined;
-  const ip = rawIp || req.socket.remoteAddress || 'unknown';
-  return crypto.createHash('sha256').update(ip).digest('hex');
+        : undefined) ||
+    req.socket.remoteAddress ||
+    'unknown';
+  return crypto.createHash('sha256').update(rawIp).digest('hex');
+}
+
+async function readAttemptRecord(
+  keyHash: string,
+): Promise<{ attempts: number; resetAt: number } | null> {
+  if (isPersistenceEnabled()) {
+    try {
+      return await getDbLoginAttempt(keyHash);
+    } catch {
+      // Fall back to in-memory counter if DB read fails transiently
+    }
+  }
+  return memoryLoginAttempts.get(keyHash) ?? null;
+}
+
+async function incrementAttemptRecord(keyHash: string): Promise<void> {
+  const now = Date.now();
+  if (isPersistenceEnabled()) {
+    try {
+      const current = await getDbLoginAttempt(keyHash);
+      const nextAttempts =
+        current && now < current.resetAt ? current.attempts + 1 : 1;
+      const nextReset =
+        current && now < current.resetAt
+          ? current.resetAt
+          : now + LOGIN_WINDOW_MS;
+      await saveDbLoginAttempt(keyHash, nextAttempts, nextReset);
+      return;
+    } catch {
+      // Fall back to memory map below
+    }
+  }
+
+  const current = memoryLoginAttempts.get(keyHash);
+  if (current && now < current.resetAt) {
+    memoryLoginAttempts.set(keyHash, {
+      attempts: current.attempts + 1,
+      resetAt: current.resetAt,
+    });
+  } else {
+    memoryLoginAttempts.set(keyHash, {
+      attempts: 1,
+      resetAt: now + LOGIN_WINDOW_MS,
+    });
+  }
 }
 
 export async function checkLoginRateLimit(req: Request): Promise<{
@@ -216,74 +307,50 @@ export async function checkLoginRateLimit(req: Request): Promise<{
 }> {
   const ipHash = getClientIpHash(req);
   const now = Date.now();
+  const store = isPersistenceEnabled() ? 'database' : 'memory';
 
-  if (isPersistenceEnabled()) {
-    try {
-      const record = await getDbLoginAttempt(ipHash);
-      if (record && now < record.resetAt && record.attempts >= MAX_LOGIN_ATTEMPTS) {
-        return {
-          allowed: false,
-          retryAfterSeconds: Math.max(
-            1,
-            Math.ceil((record.resetAt - now) / 1000),
-          ),
-          store: 'database',
-        };
-      }
-      return { allowed: true, retryAfterSeconds: 0, store: 'database' };
-    } catch {
-      // Fall back cleanly to in-memory counter if DB check fails transiently
-    }
+  const [ipRec, globalRec] = await Promise.all([
+    readAttemptRecord(ipHash),
+    readAttemptRecord(GLOBAL_RATE_KEY),
+  ]);
+
+  if (ipRec && now < ipRec.resetAt && ipRec.attempts >= MAX_LOGIN_ATTEMPTS_PER_IP) {
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(1, Math.ceil((ipRec.resetAt - now) / 1000)),
+      store,
+    };
   }
 
-  const mem = memoryLoginAttempts.get(ipHash);
-  if (mem) {
-    if (now >= mem.resetAt) {
-      memoryLoginAttempts.delete(ipHash);
-    } else if (mem.attempts >= MAX_LOGIN_ATTEMPTS) {
-      return {
-        allowed: false,
-        retryAfterSeconds: Math.max(1, Math.ceil((mem.resetAt - now) / 1000)),
-        store: 'memory',
-      };
-    }
+  if (
+    globalRec &&
+    now < globalRec.resetAt &&
+    globalRec.attempts >= MAX_LOGIN_ATTEMPTS_GLOBAL
+  ) {
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(
+        1,
+        Math.ceil((globalRec.resetAt - now) / 1000),
+      ),
+      store,
+    };
   }
 
-  return { allowed: true, retryAfterSeconds: 0, store: 'memory' };
+  if (ipRec && now >= ipRec.resetAt) memoryLoginAttempts.delete(ipHash);
+  if (globalRec && now >= globalRec.resetAt) {
+    memoryLoginAttempts.delete(GLOBAL_RATE_KEY);
+  }
+
+  return { allowed: true, retryAfterSeconds: 0, store };
 }
 
 export async function recordFailedLoginAttempt(req: Request): Promise<void> {
   const ipHash = getClientIpHash(req);
-  const now = Date.now();
-
-  if (isPersistenceEnabled()) {
-    try {
-      const current = await getDbLoginAttempt(ipHash);
-      const nextAttempts =
-        current && now < current.resetAt ? current.attempts + 1 : 1;
-      const nextReset =
-        current && now < current.resetAt
-          ? current.resetAt
-          : now + LOGIN_WINDOW_MS;
-      await saveDbLoginAttempt(ipHash, nextAttempts, nextReset);
-      return;
-    } catch {
-      // Fall back to memory map below
-    }
-  }
-
-  const current = memoryLoginAttempts.get(ipHash);
-  if (current && now < current.resetAt) {
-    memoryLoginAttempts.set(ipHash, {
-      attempts: current.attempts + 1,
-      resetAt: current.resetAt,
-    });
-  } else {
-    memoryLoginAttempts.set(ipHash, {
-      attempts: 1,
-      resetAt: now + LOGIN_WINDOW_MS,
-    });
-  }
+  await Promise.all([
+    incrementAttemptRecord(ipHash),
+    incrementAttemptRecord(GLOBAL_RATE_KEY),
+  ]);
 }
 
 export async function clearLoginRateLimit(req: Request): Promise<void> {
@@ -298,29 +365,73 @@ export async function clearLoginRateLimit(req: Request): Promise<void> {
   }
 }
 
-export function requireAdmin(
+/**
+ * Defense-in-depth origin check for browser-originated state-changing requests.
+ */
+export function verifySameOrigin(
   req: Request,
   res: Response,
   next: NextFunction,
 ): void {
-  if (!getSessionSecret()) {
-    res.status(503).json({
-      error: 'Admin authentication is disabled: SESSION_SECRET is not configured.',
-    });
+  const origin = req.headers.origin;
+  if (!origin) {
+    next();
     return;
   }
 
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    res.status(401).json({ error: 'Authentication required.' });
-    return;
+  const forwardedHost =
+    typeof req.headers['x-forwarded-host'] === 'string'
+      ? req.headers['x-forwarded-host']
+      : undefined;
+  const expectedHost = forwardedHost || req.headers.host;
+
+  try {
+    const parsedOrigin = new URL(origin);
+    if (expectedHost && parsedOrigin.host === expectedHost) {
+      next();
+      return;
+    }
+
+    const appUrl = process.env.APP_URL?.trim();
+    if (appUrl && parsedOrigin.host === new URL(appUrl).host) {
+      next();
+      return;
+    }
+  } catch {
+    // Reject malformed Origin below
   }
 
-  const token = authHeader.slice(7).trim();
-  if (!verifyAdminToken(token)) {
+  res.status(403).json({ error: 'Cross-origin request rejected.' });
+}
+
+export async function requireAdmin(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    if (!getSessionSecret()) {
+      res.status(503).json({
+        error: 'Admin console is disabled in this environment.',
+      });
+      return;
+    }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'Authentication required.' });
+      return;
+    }
+
+    const token = authHeader.slice(7).trim();
+    const valid = await verifyAdminToken(token);
+    if (!valid) {
+      res.status(401).json({ error: 'Invalid or expired admin session.' });
+      return;
+    }
+
+    next();
+  } catch {
     res.status(401).json({ error: 'Invalid or expired admin session.' });
-    return;
   }
-
-  next();
 }

@@ -14,6 +14,7 @@ import {
   requireAdmin,
   verifyEnvPasscode,
   verifyPasswordHash,
+  verifySameOrigin,
 } from './server/auth.ts';
 import {
   createSignedCloudinaryUpload,
@@ -56,6 +57,7 @@ import {
   cleanString,
   isSafeAssetUrl,
   isValidEmail,
+  normalizeAdminPath,
   normalizeCategoryId,
   slugifyLower,
 } from './server/validators.ts';
@@ -66,6 +68,14 @@ const __dirname = path.dirname(__filename);
 const APP_VERSION = process.env.npm_package_version || '1.0.0';
 const isProd = process.env.NODE_ENV === 'production';
 const isVercel = Boolean(process.env.VERCEL);
+const ADMIN_PATH = normalizeAdminPath(
+  process.env.ADMIN_PATH || process.env.VITE_ADMIN_PATH,
+);
+
+function isAdminPathRequest(reqPath: string): boolean {
+  const normalized = reqPath.replace(/\/+$/, '') || '/';
+  return normalized === ADMIN_PATH || normalized.startsWith(`${ADMIN_PATH}/`);
+}
 
 const app = express();
 app.disable('x-powered-by');
@@ -82,6 +92,30 @@ app.use((_req, res, next) => {
 app.use('/api', (_req, res, next) => {
   res.setHeader('Cache-Control', 'no-store, max-age=0');
   next();
+});
+
+// Strict no-store, noindex, and same-origin guard on all admin API routes
+app.use('/api/admin', (req, res, next) => {
+  res.setHeader(
+    'Cache-Control',
+    'no-store, no-cache, must-revalidate, private',
+  );
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  if (
+    req.method !== 'GET' &&
+    req.method !== 'HEAD' &&
+    req.method !== 'OPTIONS'
+  ) {
+    verifySameOrigin(req, res, next);
+    return;
+  }
+  next();
+});
+
+// Block legacy predictable /admin route completely
+app.all(['/admin', '/admin/*'], (_req, res) => {
+  res.status(404).type('text/plain').send('Not found');
 });
 
 app.use(express.json({ limit: '1mb' }));
@@ -177,12 +211,9 @@ app.get('/api/admin/auth/status', async (_req, res) => {
   try {
     const authState = await getAdminAuthState();
     res.json({
-      ...authState,
-      storage: {
-        tursoCloud: isTursoCloudConfigured(),
-        persistenceEnabled: isPersistenceEnabled(),
-        cloudinaryConfigured: isCloudinaryConfigured(),
-      },
+      adminEnabled: authState.adminEnabled,
+      disabledReason: authState.disabledReason,
+      needsSetup: authState.needsSetup,
     });
   } catch {
     res.status(500).json({ error: 'Unable to inspect admin status.' });
@@ -191,7 +222,17 @@ app.get('/api/admin/auth/status', async (_req, res) => {
 
 app.post('/api/admin/auth/setup', async (req, res) => {
   try {
+    const rate = await checkLoginRateLimit(req);
+    if (!rate.allowed) {
+      res.setHeader('Retry-After', String(rate.retryAfterSeconds));
+      res.status(429).json({
+        error: 'Too many requests. Please wait before trying again.',
+      });
+      return;
+    }
+
     if (isServerlessOrProd() || isEnvPasscodeConfigured()) {
+      await recordFailedLoginAttempt(req);
       res.status(403).json({
         error: 'Initial admin setup is disabled in this environment.',
       });
@@ -226,7 +267,8 @@ app.post('/api/admin/auth/setup', async (req, res) => {
       return;
     }
 
-    const token = createAdminToken();
+    await clearLoginRateLimit(req);
+    const token = await createAdminToken();
     res.status(201).json({ token });
   } catch (err) {
     handleRouteError(res, err, 'Unable to initialize admin credentials.');
@@ -262,11 +304,13 @@ app.post('/api/admin/auth/login', async (req, res) => {
     }
 
     let valid = false;
-    if (isEnvPasscodeConfigured()) {
-      valid = verifyEnvPasscode(password);
-    } else if (isPersistenceEnabled()) {
-      const storedHash = await getAdminCredentialHash();
-      valid = Boolean(storedHash && verifyPasswordHash(password, storedHash));
+    if (password.length <= 256) {
+      if (isEnvPasscodeConfigured()) {
+        valid = verifyEnvPasscode(password);
+      } else if (isPersistenceEnabled()) {
+        const storedHash = await getAdminCredentialHash();
+        valid = Boolean(storedHash && verifyPasswordHash(password, storedHash));
+      }
     }
 
     if (!valid) {
@@ -276,7 +320,8 @@ app.post('/api/admin/auth/login', async (req, res) => {
     }
 
     await clearLoginRateLimit(req);
-    res.json({ token: createAdminToken() });
+    const token = await createAdminToken();
+    res.json({ token });
   } catch (err) {
     handleRouteError(res, err, 'Unable to sign in.');
   }
@@ -904,13 +949,17 @@ function registerProductionHtmlRoutes(): void {
       const rawHtml = await readBuiltHtmlTemplate();
       const portfolio = await getPublicPortfolio();
       const enriched = injectHtmlSeoMeta(rawHtml, req, portfolio);
-      res
-        .status(200)
-        .set({
-          'Content-Type': 'text/html; charset=utf-8',
-          'Cache-Control': 'no-store, max-age=0',
-        })
-        .end(enriched);
+      const headers: Record<string, string> = {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store, max-age=0',
+      };
+      if (isAdminPathRequest(req.path)) {
+        headers['Cache-Control'] =
+          'no-store, no-cache, must-revalidate, private';
+        headers['Pragma'] = 'no-cache';
+        headers['X-Robots-Tag'] = 'noindex, nofollow, noarchive';
+      }
+      res.status(200).set(headers).end(enriched);
     } catch (err) {
       next(err);
     }
@@ -934,7 +983,7 @@ async function startLocalServer(): Promise<void> {
       appType: 'spa',
     });
 
-    app.get(['/', '/admin'], async (req, res, next) => {
+    app.get(['/', ADMIN_PATH, `${ADMIN_PATH}/*`], async (req, res, next) => {
       try {
         const rawHtml = await fs.readFile(
           path.resolve(__dirname, 'index.html'),
@@ -946,13 +995,17 @@ async function startLocalServer(): Promise<void> {
         );
         const portfolio = await getPublicPortfolio();
         const enriched = injectHtmlSeoMeta(transformed, req, portfolio);
-        res
-          .status(200)
-          .set({
-            'Content-Type': 'text/html; charset=utf-8',
-            'Cache-Control': 'no-store, max-age=0',
-          })
-          .end(enriched);
+        const headers: Record<string, string> = {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store, max-age=0',
+        };
+        if (isAdminPathRequest(req.path)) {
+          headers['Cache-Control'] =
+            'no-store, no-cache, must-revalidate, private';
+          headers['Pragma'] = 'no-cache';
+          headers['X-Robots-Tag'] = 'noindex, nofollow, noarchive';
+        }
+        res.status(200).set(headers).end(enriched);
       } catch (err) {
         next(err);
       }

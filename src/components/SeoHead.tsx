@@ -11,6 +11,7 @@ import {
   getLocalizedCategory,
   getLocalizedJournalEntry,
 } from '../i18n/translations';
+import { ADMIN_ROUTE_PATH } from '../utils/adminRoute';
 
 interface SeoHeadProps {
   isAdminRoute: boolean;
@@ -200,10 +201,10 @@ export function SeoHead({
     const extraGraph: Array<Record<string, unknown>> = [];
 
     if (isAdminRoute) {
-      pageTitle = 'Studio Admin — Volker Schnüttgen Archive';
-      pageDescription = 'Private studio archive management console.';
-      robots = 'noindex, nofollow';
-      canonical = `${origin}/admin`;
+      pageTitle = 'Studio Console — Volker Schnüttgen';
+      pageDescription = 'Private studio console.';
+      robots = 'noindex, nofollow, noarchive';
+      canonical = `${origin}${ADMIN_ROUTE_PATH}`;
     } else if (locProject) {
       pageTitle = `${locProject.title} (${locProject.year}) — Volker Schnüttgen`;
       pageDescription = truncateDesc(

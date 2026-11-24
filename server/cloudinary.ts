@@ -57,7 +57,8 @@ export function createSignedCloudinaryUpload(): CloudinaryUploadSignature {
 }
 
 /**
- * Verifies that an uploaded URL belongs strictly to the configured Cloudinary cloud name.
+ * Verifies that an uploaded URL belongs strictly to the configured Cloudinary cloud name
+ * and points to an image upload delivery path.
  */
 export function isTrustedCloudinaryUrl(rawUrl: string): boolean {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim();
@@ -66,7 +67,8 @@ export function isTrustedCloudinaryUrl(rawUrl: string): boolean {
     const parsed = new URL(rawUrl.trim());
     if (parsed.protocol !== 'https:') return false;
     if (parsed.hostname !== 'res.cloudinary.com') return false;
-    return parsed.pathname.startsWith(`/${cloudName}/`);
+    if (parsed.pathname.includes('..')) return false;
+    return parsed.pathname.startsWith(`/${cloudName}/image/upload/`);
   } catch {
     return false;
   }

@@ -29,14 +29,6 @@
       "destination": "/api/index"
     },
     {
-      "source": "/admin",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/admin/(.*)",
-      "destination": "/api/index"
-    },
-    {
       "source": "/",
       "destination": "/api/index"
     },

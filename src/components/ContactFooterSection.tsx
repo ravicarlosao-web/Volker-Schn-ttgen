@@ -9,13 +9,11 @@ interface ContactFooterSectionProps {
   onSelectFloor: (floorId: FloorItem['id']) => void;
   onOpenStartProject?: () => void;
   onOpenPrivacy: () => void;
-  onOpenAdmin?: () => void;
 }
 
 export function ContactFooterSection({
   onSelectFloor,
   onOpenPrivacy,
-  onOpenAdmin,
 }: ContactFooterSectionProps) {
   const { language } = useLanguage();
   const t = UI_TRANSLATIONS[language].contact;
@@ -443,22 +441,12 @@ export function ContactFooterSection({
           ))}
         </div>
 
-        {/* Bottom Copyright, Privacy & Admin Bar */}
+        {/* Bottom Copyright & Privacy Bar */}
         <div className="mt-8 pt-6 border-t border-black/15 flex flex-wrap items-center justify-between gap-4">
           <span className="font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666]">
             {t.copyright}
           </span>
           <div className="flex items-center gap-6">
-            {onOpenAdmin && (
-              <button
-                type="button"
-                onClick={onOpenAdmin}
-                className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] hover:text-black transition-colors cursor-pointer"
-              >
-                <span>{t.adminPortal}</span>
-                <ArrowUpRight className="w-3 h-3" strokeWidth={1.25} aria-hidden="true" />
-              </button>
-            )}
             <button
               type="button"
               onClick={onOpenPrivacy}

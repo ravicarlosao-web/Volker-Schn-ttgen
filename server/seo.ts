@@ -4,6 +4,7 @@ import type {
   PortfolioCategoryItem,
   ProjectItem,
 } from '../src/data/formtectureData.ts';
+import { normalizeAdminPath } from './validators.ts';
 
 export interface PublicPortfolioData {
   heroImage: string;
@@ -78,59 +79,48 @@ export function buildRobotsTxt(baseUrl: string): string {
     'User-agent: *',
     'Allow: /',
     'Disallow: /api/',
-    'Disallow: /admin',
     '',
     '# Major Search Engines',
     'User-agent: Googlebot',
     'Allow: /',
     'Disallow: /api/',
-    'Disallow: /admin',
     '',
     'User-agent: Bingbot',
     'Allow: /',
     'Disallow: /api/',
-    'Disallow: /admin',
     '',
     '# Generative AI & Answer Engines (GEO)',
     'User-agent: GPTBot',
     'Allow: /',
     'Disallow: /api/',
-    'Disallow: /admin',
     '',
     'User-agent: OAI-SearchBot',
     'Allow: /',
     'Disallow: /api/',
-    'Disallow: /admin',
     '',
     'User-agent: ChatGPT-User',
     'Allow: /',
     'Disallow: /api/',
-    'Disallow: /admin',
     '',
     'User-agent: ClaudeBot',
     'Allow: /',
     'Disallow: /api/',
-    'Disallow: /admin',
     '',
     'User-agent: anthropic-ai',
     'Allow: /',
     'Disallow: /api/',
-    'Disallow: /admin',
     '',
     'User-agent: PerplexityBot',
     'Allow: /',
     'Disallow: /api/',
-    'Disallow: /admin',
     '',
     'User-agent: Google-Extended',
     'Allow: /',
     'Disallow: /api/',
-    'Disallow: /admin',
     '',
     'User-agent: Applebot-Extended',
     'Allow: /',
     'Disallow: /api/',
-    'Disallow: /admin',
     '',
     `Sitemap: ${baseUrl}/sitemap.xml`,
     `# LLMs Knowledge Index: ${baseUrl}/llms.txt`,
@@ -377,7 +367,13 @@ export function injectHtmlSeoMeta(
   const journalId = typeof req.query.journal === 'string' ? req.query.journal : '';
   const categoryId = typeof req.query.category === 'string' ? req.query.category : '';
   const isPortfolioAll = req.query.portfolio === 'all';
-  const isAdmin = req.path.startsWith('/admin');
+  const adminPath = normalizeAdminPath(
+    process.env.ADMIN_PATH || process.env.VITE_ADMIN_PATH,
+  );
+  const normalizedReqPath = req.path.replace(/\/+$/, '') || '/';
+  const isAdmin =
+    normalizedReqPath === adminPath ||
+    normalizedReqPath.startsWith(`${adminPath}/`);
 
   let title = 'Volker Schnüttgen — Sculptor & New Media Artist | Sintra';
   let description =
@@ -401,10 +397,10 @@ export function injectHtmlSeoMeta(
   let routeSchema: Record<string, unknown> | null = null;
 
   if (isAdmin) {
-    title = 'Studio Admin — Volker Schnüttgen Archive';
-    description = 'Private studio administration console.';
-    robots = 'noindex, nofollow';
-    canonicalUrl = `${baseUrl}/admin`;
+    title = 'Studio Console — Volker Schnüttgen';
+    description = 'Private studio console.';
+    robots = 'noindex, nofollow, noarchive';
+    canonicalUrl = `${baseUrl}${adminPath}`;
   } else if (matchedWork) {
     title = `${matchedWork.title} (${matchedWork.year}) — Volker Schnüttgen`;
     description = truncateMeta(
@@ -559,7 +555,7 @@ export function injectHtmlSeoMeta(
   out = out.replace('</head>', `    ${dynamicTags}\n  </head>`);
   out = out.replace(
     /<script id="vs-structured-data" type="application\/ld\+json">[\s\S]*?<\/script>/i,
-    `<script id="vs-structured-data" type="application/ld+json">${JSON.stringify(graph)}</script>`,
+    `<script id="vs-structured-data" type="application/ld+json">${JSON.stringify(graph).replace(/</g, '\\u003c')}</script>`,
   );
 
   return out;

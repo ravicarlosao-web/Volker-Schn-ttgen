@@ -6,11 +6,38 @@ export function cleanString(
   allowNewlines = false,
 ): string {
   if (typeof value !== 'string') return '';
-  let text = value.trim();
+  // Strip unsafe ASCII control characters (preserving \n/\r only when allowNewlines is true)
+  let text = value
+    .replace(
+      allowNewlines
+        ? /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g
+        : /[\x00-\x1F\x7F]/g,
+      ' ',
+    )
+    .trim();
   if (!allowNewlines) {
     text = text.replace(/[\r\n\t]+/g, ' ');
   }
   return text.slice(0, maxLength);
+}
+
+export function normalizeAdminPath(raw?: string): string {
+  const DEFAULT_PATH = '/atelier-vs-7k9m2x';
+  const trimmed = (raw || '').trim();
+  if (!trimmed) return DEFAULT_PATH;
+  const withSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  const cleaned = withSlash.replace(/\/+$/, '');
+  if (
+    !cleaned ||
+    cleaned === '/' ||
+    cleaned === '/admin' ||
+    cleaned.startsWith('/api') ||
+    cleaned.startsWith('/assets') ||
+    !/^\/[a-zA-Z0-9/_-]+$/.test(cleaned)
+  ) {
+    return DEFAULT_PATH;
+  }
+  return cleaned;
 }
 
 export function isValidEmail(email: string): boolean {
