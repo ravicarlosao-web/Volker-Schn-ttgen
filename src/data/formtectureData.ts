@@ -28,6 +28,39 @@ export interface EnquiryItem {
   createdAt: string;
 }
 
+export type ContentLocale = 'pt' | 'fr';
+
+export interface CategoryTranslation {
+  title?: string;
+  categoryLine?: string;
+  metaLine?: string;
+}
+
+export interface ProjectTranslation {
+  title?: string;
+  categoryLine?: string;
+  medium?: string;
+  context?: string;
+  lead?: string;
+  steps?: [ProjectStep, ProjectStep, ProjectStep];
+}
+
+export interface JournalTranslation {
+  date?: string;
+  title?: string;
+  subtitle?: string;
+  creditLabel?: string;
+  creditValue?: string;
+  secondaryLabel?: string;
+  secondaryValue?: string;
+  introParagraphs?: string[];
+  largeHeading?: string;
+  largeHeadingText?: string;
+  subHeading?: string;
+  subHeadingText?: string;
+  details?: string[];
+}
+
 export interface PortfolioCategoryItem {
   id: PortfolioCategory;
   code: string;
@@ -35,6 +68,7 @@ export interface PortfolioCategoryItem {
   categoryLine: string;
   metaLine: string;
   image: string;
+  translations?: Partial<Record<ContentLocale, CategoryTranslation>>;
 }
 
 export interface ProjectItem {
@@ -53,6 +87,7 @@ export interface ProjectItem {
   gallery: [string, string, string];
   steps: [ProjectStep, ProjectStep, ProjectStep];
   featured: boolean;
+  translations?: Partial<Record<ContentLocale, ProjectTranslation>>;
 }
 
 export interface DisciplineItem {
@@ -87,6 +122,7 @@ export interface JournalEntry {
   subHeadingText: string;
   details: string[];
   featured: boolean;
+  translations?: Partial<Record<ContentLocale, JournalTranslation>>;
 }
 
 export const HERO_IMAGE = '/src/assets/images/color_hero_oak_stone_1795365610296.jpg';

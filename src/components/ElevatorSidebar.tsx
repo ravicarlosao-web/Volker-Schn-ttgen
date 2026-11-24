@@ -12,7 +12,7 @@ interface ElevatorSidebarProps {
 const LANGUAGES: Array<{ code: Language; label: string; aria: string }> = [
   { code: 'en', label: 'EN', aria: 'Switch language to English' },
   { code: 'pt', label: 'PT', aria: 'Mudar idioma para Português' },
-  { code: 'de', label: 'DE', aria: 'Sprache auf Deutsch umstellen' },
+  { code: 'fr', label: 'FR', aria: 'Passer la langue en français' },
 ];
 
 export function ElevatorSidebar({

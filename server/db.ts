@@ -85,6 +85,7 @@ async function runSchemaAndSeed(): Promise<void> {
       category_line TEXT NOT NULL,
       meta_line TEXT NOT NULL,
       image TEXT NOT NULL,
+      translations_json TEXT NOT NULL DEFAULT '{}',
       sort_order INTEGER NOT NULL DEFAULT 0
     )
   `);
@@ -105,6 +106,7 @@ async function runSchemaAndSeed(): Promise<void> {
       image TEXT NOT NULL,
       gallery_json TEXT NOT NULL,
       steps_json TEXT NOT NULL,
+      translations_json TEXT NOT NULL DEFAULT '{}',
       featured INTEGER NOT NULL DEFAULT 0,
       sort_order INTEGER NOT NULL DEFAULT 0
     )
@@ -128,10 +130,22 @@ async function runSchemaAndSeed(): Promise<void> {
       sub_heading TEXT NOT NULL,
       sub_heading_text TEXT NOT NULL,
       details_json TEXT NOT NULL,
+      translations_json TEXT NOT NULL DEFAULT '{}',
       featured INTEGER NOT NULL DEFAULT 1,
       sort_order INTEGER NOT NULL DEFAULT 0
     )
   `);
+
+  // Idempotent schema upgrade for existing SQLite / Turso tables created before translations_json
+  for (const table of ['portfolio_categories', 'projects', 'journal_entries'] as const) {
+    const info = await db.execute(`PRAGMA table_info(${table})`);
+    const hasCol = info.rows.some((r) => String(r.name) === 'translations_json');
+    if (!hasCol) {
+      await db.execute(
+        `ALTER TABLE ${table} ADD COLUMN translations_json TEXT NOT NULL DEFAULT '{}'`,
+      );
+    }
+  }
 
   await db.execute(`
     CREATE TABLE IF NOT EXISTS enquiries (
@@ -331,12 +345,27 @@ export async function getPublicPortfolio(): Promise<{
   await initDatabase();
   const db = getDb();
 
+  const parseTranslations = <T>(raw: unknown): T | undefined => {
+    if (typeof raw !== 'string' || !raw.trim() || raw.trim() === '{}') {
+      return undefined;
+    }
+    try {
+      const parsed = JSON.parse(raw) as T;
+      if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+        return parsed;
+      }
+    } catch {
+      // ignore malformed translation json
+    }
+    return undefined;
+  };
+
   const [settingsRes, catRes, projRes, journalRes] = await Promise.all([
     db.execute(
       "SELECT key, value FROM site_settings WHERE key IN ('hero_image', 'practice_image', 'model_image')",
     ),
     db.execute(
-      'SELECT id, code, title, category_line, meta_line, image FROM portfolio_categories ORDER BY sort_order ASC, code ASC',
+      'SELECT id, code, title, category_line, meta_line, image, translations_json FROM portfolio_categories ORDER BY sort_order ASC, code ASC',
     ),
     db.execute('SELECT * FROM projects ORDER BY sort_order ASC, floor ASC'),
     db.execute('SELECT * FROM journal_entries ORDER BY sort_order ASC'),
@@ -353,14 +382,20 @@ export async function getPublicPortfolio(): Promise<{
   const practiceImage = settingsMap.get('practice_image') || PRACTICE_IMAGE;
   const modelImage = settingsMap.get('model_image') || MODEL_IMAGE;
 
-  const categories: PortfolioCategoryItem[] = catRes.rows.map((r) => ({
-    id: String(r.id),
-    code: String(r.code),
-    title: String(r.title),
-    categoryLine: String(r.category_line),
-    metaLine: String(r.meta_line),
-    image: String(r.image),
-  }));
+  const categories: PortfolioCategoryItem[] = catRes.rows.map((r) => {
+    const translations = parseTranslations<PortfolioCategoryItem['translations']>(
+      r.translations_json,
+    );
+    return {
+      id: String(r.id),
+      code: String(r.code),
+      title: String(r.title),
+      categoryLine: String(r.category_line),
+      metaLine: String(r.meta_line),
+      image: String(r.image),
+      ...(translations ? { translations } : {}),
+    };
+  });
 
   const projects: ProjectItem[] = projRes.rows.map((r) => {
     let gallery: [string, string, string] = [
@@ -391,6 +426,10 @@ export async function getPublicPortfolio(): Promise<{
       // fallback preserved
     }
 
+    const translations = parseTranslations<ProjectItem['translations']>(
+      r.translations_json,
+    );
+
     return {
       id: String(r.id),
       floor: String(r.floor),
@@ -407,6 +446,7 @@ export async function getPublicPortfolio(): Promise<{
       gallery,
       steps,
       featured: Boolean(Number(r.featured)),
+      ...(translations ? { translations } : {}),
     };
   });
 
@@ -423,6 +463,10 @@ export async function getPublicPortfolio(): Promise<{
     } catch {
       details = [];
     }
+
+    const translations = parseTranslations<JournalEntry['translations']>(
+      r.translations_json,
+    );
 
     return {
       id: String(r.id),
@@ -442,6 +486,7 @@ export async function getPublicPortfolio(): Promise<{
       subHeadingText: String(r.sub_heading_text),
       details,
       featured: Boolean(Number(r.featured)),
+      ...(translations ? { translations } : {}),
     };
   });
 
@@ -521,14 +566,15 @@ export async function saveCategory(
   }
 
   await db.execute({
-    sql: `INSERT INTO portfolio_categories (id, code, title, category_line, meta_line, image, sort_order)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+    sql: `INSERT INTO portfolio_categories (id, code, title, category_line, meta_line, image, translations_json, sort_order)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             code = excluded.code,
             title = excluded.title,
             category_line = excluded.category_line,
             meta_line = excluded.meta_line,
-            image = excluded.image`,
+            image = excluded.image,
+            translations_json = excluded.translations_json`,
     args: [
       category.id,
       category.code,
@@ -536,6 +582,7 @@ export async function saveCategory(
       category.categoryLine,
       category.metaLine,
       category.image,
+      JSON.stringify(category.translations ?? {}),
       order,
     ],
   });
@@ -593,8 +640,8 @@ export async function saveProject(project: ProjectItem): Promise<void> {
     sql: `INSERT INTO projects (
             id, floor, title, location, year, typology, portfolio_category,
             category_line, medium, context, lead, image, gallery_json, steps_json,
-            featured, sort_order
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            translations_json, featured, sort_order
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             floor = excluded.floor,
             title = excluded.title,
@@ -609,6 +656,7 @@ export async function saveProject(project: ProjectItem): Promise<void> {
             image = excluded.image,
             gallery_json = excluded.gallery_json,
             steps_json = excluded.steps_json,
+            translations_json = excluded.translations_json,
             featured = excluded.featured`,
     args: [
       project.id,
@@ -625,6 +673,7 @@ export async function saveProject(project: ProjectItem): Promise<void> {
       project.image,
       JSON.stringify(project.gallery),
       JSON.stringify(project.steps),
+      JSON.stringify(project.translations ?? {}),
       project.featured ? 1 : 0,
       order,
     ],
@@ -674,8 +723,8 @@ export async function saveJournalEntry(entry: JournalEntry): Promise<void> {
             id, date, category, title, subtitle, image,
             credit_label, credit_value, secondary_label, secondary_value,
             intro_paragraphs_json, large_heading, large_heading_text,
-            sub_heading, sub_heading_text, details_json, featured, sort_order
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            sub_heading, sub_heading_text, details_json, translations_json, featured, sort_order
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             date = excluded.date,
             category = excluded.category,
@@ -692,6 +741,7 @@ export async function saveJournalEntry(entry: JournalEntry): Promise<void> {
             sub_heading = excluded.sub_heading,
             sub_heading_text = excluded.sub_heading_text,
             details_json = excluded.details_json,
+            translations_json = excluded.translations_json,
             featured = excluded.featured`,
     args: [
       entry.id,
@@ -710,6 +760,7 @@ export async function saveJournalEntry(entry: JournalEntry): Promise<void> {
       entry.subHeading,
       entry.subHeadingText,
       JSON.stringify(entry.details),
+      JSON.stringify(entry.translations ?? {}),
       entry.featured ? 1 : 0,
       order,
     ],

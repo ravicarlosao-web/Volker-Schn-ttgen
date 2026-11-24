@@ -15,15 +15,23 @@ import {
 } from 'lucide-react';
 import { usePortfolioData } from '../context/PortfolioDataContext';
 import type {
+  CategoryTranslation,
+  ContentLocale,
   EnquiryItem,
   JournalEntry,
+  JournalTranslation,
   PortfolioCategoryItem,
   ProjectItem,
+  ProjectTranslation,
 } from '../data/formtectureData';
+import { FR_PROJECTS, PT_PROJECTS } from '../i18n/projectTranslations';
+import { UI_TRANSLATIONS } from '../i18n/translations';
 
 interface AdminPageProps {
   onExit: () => void;
 }
+
+type ContentLang = 'en' | ContentLocale;
 
 type AdminTab =
   | 'hero'
@@ -189,6 +197,69 @@ function ImageField({
   );
 }
 
+function LanguageTabs({
+  value,
+  onChange,
+  hasPt,
+  hasFr,
+}: {
+  value: ContentLang;
+  onChange: (lang: ContentLang) => void;
+  hasPt: boolean;
+  hasFr: boolean;
+}) {
+  const tabs: Array<{
+    id: ContentLang;
+    label: string;
+    status: string;
+  }> = [
+    { id: 'en', label: 'EN · ENGLISH', status: 'PRIMARY' },
+    { id: 'pt', label: 'PT · PORTUGUÊS', status: hasPt ? 'SET' : 'EMPTY' },
+    { id: 'fr', label: 'FR · FRANÇAIS', status: hasFr ? 'SET' : 'EMPTY' },
+  ];
+
+  return (
+    <div className="space-y-2 border border-black/15 bg-[#fafafa] p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-[#595959]">
+          TEXT LANGUAGE / IDIOMA DO TEXTO
+        </span>
+        <span className="font-mono text-[9px] tracking-[0.1em] uppercase text-[#666666]">
+          SAVED TOGETHER TO DATABASE
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {tabs.map((tab) => {
+          const active = value === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => onChange(tab.id)}
+              className={`px-3 py-2 border text-left transition-colors cursor-pointer ${
+                active
+                  ? 'bg-black text-white border-black'
+                  : 'bg-white text-black border-black/25 hover:border-black'
+              }`}
+            >
+              <span className="block font-mono text-[10px] tracking-[0.12em] uppercase">
+                {tab.label}
+              </span>
+              <span
+                className={`block font-mono text-[9px] tracking-[0.1em] uppercase mt-0.5 ${
+                  active ? 'text-white/70' : 'text-[#666666]'
+                }`}
+              >
+                {tab.status}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 const EMPTY_CATEGORY: PortfolioCategoryItem = {
   id: '',
   code: '05',
@@ -196,6 +267,7 @@ const EMPTY_CATEGORY: PortfolioCategoryItem = {
   categoryLine: '',
   metaLine: '',
   image: '',
+  translations: {},
 };
 
 function createEmptyProject(defaultCategory: string): ProjectItem {
@@ -219,6 +291,7 @@ function createEmptyProject(defaultCategory: string): ProjectItem {
       { label: 'Context', text: '' },
     ],
     featured: true,
+    translations: {},
   };
 }
 
@@ -240,7 +313,48 @@ const EMPTY_JOURNAL: JournalEntry = {
   subHeadingText: '',
   details: [''],
   featured: true,
+  translations: {},
 };
+
+function hasCategoryLocale(cat: PortfolioCategoryItem, loc: ContentLocale): boolean {
+  const t = cat.translations?.[loc];
+  return Boolean(
+    t && (t.title?.trim() || t.categoryLine?.trim() || t.metaLine?.trim()),
+  );
+}
+
+function hasWorkLocale(work: ProjectItem, loc: ContentLocale): boolean {
+  const t = work.translations?.[loc];
+  return Boolean(
+    t &&
+      (t.title?.trim() ||
+        t.categoryLine?.trim() ||
+        t.medium?.trim() ||
+        t.context?.trim() ||
+        t.lead?.trim() ||
+        t.steps?.some((s) => Boolean(s.text?.trim()))),
+  );
+}
+
+function hasJournalLocale(entry: JournalEntry, loc: ContentLocale): boolean {
+  const t = entry.translations?.[loc];
+  return Boolean(
+    t &&
+      (t.date?.trim() ||
+        t.title?.trim() ||
+        t.subtitle?.trim() ||
+        t.creditLabel?.trim() ||
+        t.creditValue?.trim() ||
+        t.secondaryLabel?.trim() ||
+        t.secondaryValue?.trim() ||
+        t.largeHeading?.trim() ||
+        t.largeHeadingText?.trim() ||
+        t.subHeading?.trim() ||
+        t.subHeadingText?.trim() ||
+        (t.introParagraphs && t.introParagraphs.some((p) => Boolean(p.trim()))) ||
+        (t.details && t.details.some((d) => Boolean(d.trim())))),
+  );
+}
 
 export function AdminPage({ onExit }: AdminPageProps) {
   const {
@@ -309,12 +423,14 @@ export function AdminPage({ onExit }: AdminPageProps) {
 
   // Category state
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [categoryLang, setCategoryLang] = useState<ContentLang>('en');
   const [categoryDraft, setCategoryDraft] = useState<PortfolioCategoryItem>(EMPTY_CATEGORY);
   const [categorySaving, setCategorySaving] = useState(false);
 
   // Works state
   const [worksSearch, setWorksSearch] = useState('');
   const [editingWorkId, setEditingWorkId] = useState<string | null>(null);
+  const [workLang, setWorkLang] = useState<ContentLang>('en');
   const [workDraft, setWorkDraft] = useState<ProjectItem>(() =>
     createEmptyProject(categories[0]?.id ?? 'STONE'),
   );
@@ -322,9 +438,16 @@ export function AdminPage({ onExit }: AdminPageProps) {
 
   // Journal state
   const [editingJournalId, setEditingJournalId] = useState<string | null>(null);
+  const [journalLang, setJournalLang] = useState<ContentLang>('en');
   const [journalDraft, setJournalDraft] = useState<JournalEntry>(EMPTY_JOURNAL);
   const [introText, setIntroText] = useState('');
   const [detailsText, setDetailsText] = useState('');
+  const [journalIntroLangText, setJournalIntroLangText] = useState<
+    Record<ContentLocale, string>
+  >({ pt: '', fr: '' });
+  const [journalDetailsLangText, setJournalDetailsLangText] = useState<
+    Record<ContentLocale, string>
+  >({ pt: '', fr: '' });
   const [journalSaving, setJournalSaving] = useState(false);
 
   // Enquiries state
@@ -662,7 +785,20 @@ export function AdminPage({ onExit }: AdminPageProps) {
   const startEditCategory = (cat: PortfolioCategoryItem) => {
     setConfirmDeleteTarget(null);
     setEditingCategoryId(cat.id);
-    setCategoryDraft({ ...cat });
+    setCategoryLang('en');
+
+    const ptStatic = UI_TRANSLATIONS.pt.portfolio.categories[cat.id];
+    const frStatic = UI_TRANSLATIONS.fr.portfolio.categories[cat.id];
+    const translations: Partial<Record<ContentLocale, CategoryTranslation>> = {
+      ...(cat.translations?.pt || ptStatic
+        ? { pt: { ...(ptStatic || {}), ...(cat.translations?.pt || {}) } }
+        : {}),
+      ...(cat.translations?.fr || frStatic
+        ? { fr: { ...(frStatic || {}), ...(cat.translations?.fr || {}) } }
+        : {}),
+    };
+
+    setCategoryDraft({ ...cat, translations });
     window.requestAnimationFrame(() => {
       categoryFormRef.current?.scrollIntoView({
         behavior: 'smooth',
@@ -673,16 +809,41 @@ export function AdminPage({ onExit }: AdminPageProps) {
 
   const resetCategoryForm = () => {
     setEditingCategoryId(null);
+    setCategoryLang('en');
     const nextCode = String(categories.length + 1).padStart(2, '0');
-    setCategoryDraft({ ...EMPTY_CATEGORY, code: nextCode });
+    setCategoryDraft({ ...EMPTY_CATEGORY, code: nextCode, translations: {} });
   };
 
   const handleSaveCategory = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!categoryDraft.code.trim()) {
+      setCategoryLang('en');
+      notify('err', 'Category index code is required.');
+      return;
+    }
+    if (!categoryDraft.title.trim() || !categoryDraft.categoryLine.trim()) {
+      setCategoryLang('en');
+      notify('err', 'English (primary) category title and subtitle are required.');
+      return;
+    }
     if (!categoryDraft.image.trim()) {
       notify('err', 'Please upload a category thumbnail image.');
       return;
     }
+
+    const cleanedTranslations: Partial<Record<ContentLocale, CategoryTranslation>> = {};
+    for (const loc of ['pt', 'fr'] as const) {
+      const src = categoryDraft.translations?.[loc];
+      if (!src) continue;
+      const obj: CategoryTranslation = {};
+      if (src.title?.trim()) obj.title = src.title.trim();
+      if (src.categoryLine?.trim()) obj.categoryLine = src.categoryLine.trim();
+      if (src.metaLine?.trim()) obj.metaLine = src.metaLine.trim();
+      if (Object.keys(obj).length > 0) {
+        cleanedTranslations[loc] = obj;
+      }
+    }
+
     setCategorySaving(true);
     try {
       const isEdit = editingCategoryId !== null;
@@ -694,6 +855,10 @@ export function AdminPage({ onExit }: AdminPageProps) {
         body: JSON.stringify({
           ...categoryDraft,
           ...(isEdit ? { id: editingCategoryId } : {}),
+          translations:
+            Object.keys(cleanedTranslations).length > 0
+              ? cleanedTranslations
+              : undefined,
         }),
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -704,7 +869,7 @@ export function AdminPage({ onExit }: AdminPageProps) {
       await refreshPortfolio();
       await refreshAdminStatus();
       resetCategoryForm();
-      notify('ok', isEdit ? 'Category updated.' : 'Category created.');
+      notify('ok', isEdit ? 'Category updated (EN / PT / FR).' : 'Category created (EN / PT / FR).');
     } catch {
       notify('err', 'Network error saving category.');
     } finally {
@@ -743,6 +908,49 @@ export function AdminPage({ onExit }: AdminPageProps) {
   const startEditWork = (work: ProjectItem) => {
     setConfirmDeleteTarget(null);
     setEditingWorkId(work.id);
+    setWorkLang('en');
+
+    const ptStatic = PT_PROJECTS[work.id];
+    const frStatic = FR_PROJECTS[work.id];
+
+    const buildWorkLoc = (
+      existing: ProjectTranslation | undefined,
+      staticSeed:
+        | {
+            title?: string;
+            categoryLine: string;
+            medium: string;
+            context: string;
+            lead: string;
+            steps: ProjectItem['steps'];
+          }
+        | undefined,
+    ): ProjectTranslation | undefined => {
+      if (!existing && !staticSeed) return undefined;
+      const baseSteps = existing?.steps ?? staticSeed?.steps;
+      return {
+        title: existing?.title ?? staticSeed?.title ?? '',
+        categoryLine: existing?.categoryLine ?? staticSeed?.categoryLine ?? '',
+        medium: existing?.medium ?? staticSeed?.medium ?? '',
+        context: existing?.context ?? staticSeed?.context ?? '',
+        lead: existing?.lead ?? staticSeed?.lead ?? '',
+        steps: baseSteps
+          ? [
+              { ...baseSteps[0] },
+              { ...baseSteps[1] },
+              { ...baseSteps[2] },
+            ]
+          : undefined,
+      };
+    };
+
+    const ptBuilt = buildWorkLoc(work.translations?.pt, ptStatic);
+    const frBuilt = buildWorkLoc(work.translations?.fr, frStatic);
+    const translations: Partial<Record<ContentLocale, ProjectTranslation>> = {
+      ...(ptBuilt ? { pt: ptBuilt } : {}),
+      ...(frBuilt ? { fr: frBuilt } : {}),
+    };
+
     setWorkDraft({
       ...work,
       gallery: [...work.gallery] as [string, string, string],
@@ -751,6 +959,7 @@ export function AdminPage({ onExit }: AdminPageProps) {
         { ...work.steps[1] },
         { ...work.steps[2] },
       ],
+      translations,
     });
     window.requestAnimationFrame(() => {
       workFormRef.current?.scrollIntoView({
@@ -762,6 +971,7 @@ export function AdminPage({ onExit }: AdminPageProps) {
 
   const resetWorkForm = () => {
     setEditingWorkId(null);
+    setWorkLang('en');
     const nextFloor = String(projects.length + 1).padStart(2, '0');
     setWorkDraft({
       ...createEmptyProject(categories[0]?.id ?? 'STONE'),
@@ -771,10 +981,47 @@ export function AdminPage({ onExit }: AdminPageProps) {
 
   const handleSaveWork = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!workDraft.title.trim() || !workDraft.year.trim() || !workDraft.lead.trim()) {
+      setWorkLang('en');
+      notify('err', 'English (primary) title, year, and lead description are required.');
+      return;
+    }
     if (!workDraft.image.trim()) {
       notify('err', 'Please upload the primary artwork image.');
       return;
     }
+
+    const cleanedTranslations: Partial<Record<ContentLocale, ProjectTranslation>> = {};
+    for (const loc of ['pt', 'fr'] as const) {
+      const src = workDraft.translations?.[loc];
+      if (!src) continue;
+      const obj: ProjectTranslation = {};
+      if (src.title?.trim()) obj.title = src.title.trim();
+      if (src.categoryLine?.trim()) obj.categoryLine = src.categoryLine.trim();
+      if (src.medium?.trim()) obj.medium = src.medium.trim();
+      if (src.context?.trim()) obj.context = src.context.trim();
+      if (src.lead?.trim()) obj.lead = src.lead.trim();
+      if (src.steps && src.steps.some((s) => Boolean(s.text?.trim()))) {
+        obj.steps = [
+          {
+            label: src.steps[0]?.label?.trim() || (loc === 'pt' ? 'Matéria' : 'Matière'),
+            text: src.steps[0]?.text?.trim() || '',
+          },
+          {
+            label: src.steps[1]?.label?.trim() || (loc === 'pt' ? 'Forma' : 'Forme'),
+            text: src.steps[1]?.text?.trim() || '',
+          },
+          {
+            label: src.steps[2]?.label?.trim() || (loc === 'pt' ? 'Contexto' : 'Contexte'),
+            text: src.steps[2]?.text?.trim() || '',
+          },
+        ];
+      }
+      if (Object.keys(obj).length > 0) {
+        cleanedTranslations[loc] = obj;
+      }
+    }
+
     setWorkSaving(true);
     try {
       const isEdit = editingWorkId !== null;
@@ -789,6 +1036,10 @@ export function AdminPage({ onExit }: AdminPageProps) {
           workDraft.gallery[1].trim() || primary,
           workDraft.gallery[2].trim() || primary,
         ],
+        translations:
+          Object.keys(cleanedTranslations).length > 0
+            ? cleanedTranslations
+            : undefined,
       };
       const res = await adminFetch(endpoint, {
         method: isEdit ? 'PUT' : 'POST',
@@ -802,7 +1053,7 @@ export function AdminPage({ onExit }: AdminPageProps) {
       await refreshPortfolio();
       await refreshAdminStatus();
       resetWorkForm();
-      notify('ok', isEdit ? 'Artwork updated.' : 'Artwork published.');
+      notify('ok', isEdit ? 'Artwork updated (EN / PT / FR).' : 'Artwork published (EN / PT / FR).');
     } catch {
       notify('err', 'Network error saving artwork.');
     } finally {
@@ -841,9 +1092,52 @@ export function AdminPage({ onExit }: AdminPageProps) {
   const startEditJournal = (entry: JournalEntry) => {
     setConfirmDeleteTarget(null);
     setEditingJournalId(entry.id);
-    setJournalDraft({ ...entry });
+    setJournalLang('en');
+
+    const ptStatic = UI_TRANSLATIONS.pt.journal.entries[entry.id];
+    const frStatic = UI_TRANSLATIONS.fr.journal.entries[entry.id];
+
+    const buildJournalLoc = (
+      existing: JournalTranslation | undefined,
+      staticSeed: typeof ptStatic | undefined,
+    ): JournalTranslation | undefined => {
+      if (!existing && !staticSeed) return undefined;
+      return {
+        date: existing?.date ?? staticSeed?.date ?? '',
+        title: existing?.title ?? staticSeed?.title ?? '',
+        subtitle: existing?.subtitle ?? staticSeed?.subtitle ?? '',
+        creditLabel: existing?.creditLabel ?? staticSeed?.creditLabel ?? '',
+        creditValue: existing?.creditValue ?? staticSeed?.creditValue ?? '',
+        secondaryLabel: existing?.secondaryLabel ?? staticSeed?.secondaryLabel ?? '',
+        secondaryValue: existing?.secondaryValue ?? staticSeed?.secondaryValue ?? '',
+        introParagraphs: existing?.introParagraphs ?? staticSeed?.introParagraphs ?? [],
+        largeHeading: existing?.largeHeading ?? staticSeed?.largeHeading ?? '',
+        largeHeadingText:
+          existing?.largeHeadingText ?? staticSeed?.largeHeadingText ?? '',
+        subHeading: existing?.subHeading ?? staticSeed?.subHeading ?? '',
+        subHeadingText: existing?.subHeadingText ?? staticSeed?.subHeadingText ?? '',
+        details: existing?.details ?? [],
+      };
+    };
+
+    const ptLoc = buildJournalLoc(entry.translations?.pt, ptStatic);
+    const frLoc = buildJournalLoc(entry.translations?.fr, frStatic);
+    const translations: Partial<Record<ContentLocale, JournalTranslation>> = {
+      ...(ptLoc ? { pt: ptLoc } : {}),
+      ...(frLoc ? { fr: frLoc } : {}),
+    };
+
+    setJournalDraft({ ...entry, translations });
     setIntroText(entry.introParagraphs.join('\n\n'));
     setDetailsText(entry.details.join('\n'));
+    setJournalIntroLangText({
+      pt: (ptLoc?.introParagraphs ?? []).join('\n\n'),
+      fr: (frLoc?.introParagraphs ?? []).join('\n\n'),
+    });
+    setJournalDetailsLangText({
+      pt: (ptLoc?.details ?? []).join('\n'),
+      fr: (frLoc?.details ?? []).join('\n'),
+    });
     window.requestAnimationFrame(() => {
       journalFormRef.current?.scrollIntoView({
         behavior: 'smooth',
@@ -854,17 +1148,64 @@ export function AdminPage({ onExit }: AdminPageProps) {
 
   const resetJournalForm = () => {
     setEditingJournalId(null);
-    setJournalDraft(EMPTY_JOURNAL);
+    setJournalLang('en');
+    setJournalDraft({ ...EMPTY_JOURNAL, translations: {} });
     setIntroText('');
     setDetailsText('');
+    setJournalIntroLangText({ pt: '', fr: '' });
+    setJournalDetailsLangText({ pt: '', fr: '' });
   };
 
   const handleSaveJournal = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (
+      !journalDraft.date.trim() ||
+      !journalDraft.title.trim() ||
+      !journalDraft.subtitle.trim()
+    ) {
+      setJournalLang('en');
+      notify('err', 'English (primary) date/venue tag, title, and subtitle are required.');
+      return;
+    }
     if (!journalDraft.image.trim()) {
       notify('err', 'Please upload a cover photograph for this entry.');
       return;
     }
+
+    const cleanedTranslations: Partial<Record<ContentLocale, JournalTranslation>> = {};
+    for (const loc of ['pt', 'fr'] as const) {
+      const src = journalDraft.translations?.[loc];
+      const paragraphs = journalIntroLangText[loc]
+        .split(/\n{2,}/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const detailsLoc = journalDetailsLangText[loc]
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      const obj: JournalTranslation = {};
+      if (src?.date?.trim()) obj.date = src.date.trim();
+      if (src?.title?.trim()) obj.title = src.title.trim();
+      if (src?.subtitle?.trim()) obj.subtitle = src.subtitle.trim();
+      if (src?.creditLabel?.trim()) obj.creditLabel = src.creditLabel.trim();
+      if (src?.creditValue?.trim()) obj.creditValue = src.creditValue.trim();
+      if (src?.secondaryLabel?.trim()) obj.secondaryLabel = src.secondaryLabel.trim();
+      if (src?.secondaryValue?.trim()) obj.secondaryValue = src.secondaryValue.trim();
+      if (paragraphs.length > 0) obj.introParagraphs = paragraphs;
+      if (src?.largeHeading?.trim()) obj.largeHeading = src.largeHeading.trim();
+      if (src?.largeHeadingText?.trim()) {
+        obj.largeHeadingText = src.largeHeadingText.trim();
+      }
+      if (src?.subHeading?.trim()) obj.subHeading = src.subHeading.trim();
+      if (src?.subHeadingText?.trim()) obj.subHeadingText = src.subHeadingText.trim();
+      if (detailsLoc.length > 0) obj.details = detailsLoc;
+
+      if (Object.keys(obj).length > 0) {
+        cleanedTranslations[loc] = obj;
+      }
+    }
+
     setJournalSaving(true);
     try {
       const isEdit = editingJournalId !== null;
@@ -888,6 +1229,10 @@ export function AdminPage({ onExit }: AdminPageProps) {
             : [journalDraft.subtitle.trim()],
         details:
           details.length > 0 ? details : [journalDraft.subtitle.trim()],
+        translations:
+          Object.keys(cleanedTranslations).length > 0
+            ? cleanedTranslations
+            : undefined,
       };
 
       const res = await adminFetch(endpoint, {
@@ -902,7 +1247,12 @@ export function AdminPage({ onExit }: AdminPageProps) {
       await refreshPortfolio();
       await refreshAdminStatus();
       resetJournalForm();
-      notify('ok', isEdit ? 'Journal entry updated.' : 'Journal entry published.');
+      notify(
+        'ok',
+        isEdit
+          ? 'Journal entry updated (EN / PT / FR).'
+          : 'Journal entry published (EN / PT / FR).',
+      );
     } catch {
       notify('err', 'Network error saving journal entry.');
     } finally {
@@ -1823,6 +2173,31 @@ export function AdminPage({ onExit }: AdminPageProps) {
                         <p className="font-mono text-[10px] tracking-[0.06em] uppercase text-[#595959] truncate">
                           {cat.categoryLine}
                         </p>
+                        <div className="mt-1.5 flex items-center gap-1.5 font-mono text-[9px] tracking-[0.12em] uppercase">
+                          <span className="border border-black bg-black text-white px-1.5 py-0.5">
+                            EN
+                          </span>
+                          <span
+                            className={`border px-1.5 py-0.5 ${
+                              hasCategoryLocale(cat, 'pt') ||
+                              Boolean(UI_TRANSLATIONS.pt.portfolio.categories[cat.id])
+                                ? 'border-black text-black'
+                                : 'border-black/20 text-[#888888]'
+                            }`}
+                          >
+                            PT
+                          </span>
+                          <span
+                            className={`border px-1.5 py-0.5 ${
+                              hasCategoryLocale(cat, 'fr') ||
+                              Boolean(UI_TRANSLATIONS.fr.portfolio.categories[cat.id])
+                                ? 'border-black text-black'
+                                : 'border-black/20 text-[#888888]'
+                            }`}
+                          >
+                            FR
+                          </span>
+                        </div>
                         {isConfirming && linkedWorksCount > 0 && (
                           <p className="mt-1 font-mono text-[9px] tracking-[0.08em] uppercase text-red-700">
                             {linkedWorksCount} ARTWORK{linkedWorksCount === 1 ? '' : 'S'} LINKED
@@ -1882,6 +2257,7 @@ export function AdminPage({ onExit }: AdminPageProps) {
             <form
               ref={categoryFormRef}
               onSubmit={handleSaveCategory}
+              noValidate
               className="lg:col-span-6 border border-black/20 p-6 sm:p-8 space-y-6 bg-white"
             >
               <div className="flex items-center justify-between pb-4 border-b border-black/15">
@@ -1901,89 +2277,190 @@ export function AdminPage({ onExit }: AdminPageProps) {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                <div>
-                  <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                    INDEX CODE
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={categoryDraft.code}
-                    onChange={(e) =>
-                      setCategoryDraft((d) => ({ ...d, code: e.target.value }))
-                    }
-                    placeholder="05"
-                    className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                    CATEGORY TITLE *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={categoryDraft.title}
-                    onChange={(e) =>
-                      setCategoryDraft((d) => ({ ...d, title: e.target.value }))
-                    }
-                    placeholder="Bronze"
-                    className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
-                  />
-                </div>
-              </div>
+              <LanguageTabs
+                value={categoryLang}
+                onChange={setCategoryLang}
+                hasPt={hasCategoryLocale(categoryDraft, 'pt')}
+                hasFr={hasCategoryLocale(categoryDraft, 'fr')}
+              />
 
-              {!editingCategoryId && (
-                <div>
-                  <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                    CATEGORY KEY (OPTIONAL, AUTO-GENERATED FROM TITLE)
-                  </label>
-                  <input
-                    type="text"
-                    value={categoryDraft.id}
-                    onChange={(e) =>
-                      setCategoryDraft((d) => ({ ...d, id: e.target.value }))
-                    }
-                    placeholder="BRONZE"
-                    className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] uppercase focus:outline-none"
-                  />
-                </div>
+              {categoryLang === 'en' ? (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        INDEX CODE *
+                      </label>
+                      <input
+                        type="text"
+                        value={categoryDraft.code}
+                        onChange={(e) =>
+                          setCategoryDraft((d) => ({ ...d, code: e.target.value }))
+                        }
+                        placeholder="05"
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        CATEGORY TITLE (EN) *
+                      </label>
+                      <input
+                        type="text"
+                        value={categoryDraft.title}
+                        onChange={(e) =>
+                          setCategoryDraft((d) => ({ ...d, title: e.target.value }))
+                        }
+                        placeholder="Bronze"
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {!editingCategoryId && (
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        CATEGORY KEY (OPTIONAL, AUTO-GENERATED FROM TITLE)
+                      </label>
+                      <input
+                        type="text"
+                        value={categoryDraft.id}
+                        onChange={(e) =>
+                          setCategoryDraft((d) => ({ ...d, id: e.target.value }))
+                        }
+                        placeholder="BRONZE"
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] uppercase focus:outline-none"
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                      SUBTITLE LINE (EN) *
+                    </label>
+                    <input
+                      type="text"
+                      value={categoryDraft.categoryLine}
+                      onChange={(e) =>
+                        setCategoryDraft((d) => ({
+                          ...d,
+                          categoryLine: e.target.value,
+                        }))
+                      }
+                      placeholder="CAST METAL · PATINA & WEIGHT"
+                      className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                      META LINE (EN)
+                    </label>
+                    <input
+                      type="text"
+                      value={categoryDraft.metaLine}
+                      onChange={(e) =>
+                        setCategoryDraft((d) => ({ ...d, metaLine: e.target.value }))
+                      }
+                      placeholder="EDITION · EDITIONED WORKS"
+                      className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                      CATEGORY TITLE ({categoryLang.toUpperCase()})
+                    </label>
+                    <input
+                      type="text"
+                      value={categoryDraft.translations?.[categoryLang]?.title ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCategoryDraft((d) => ({
+                          ...d,
+                          translations: {
+                            ...d.translations,
+                            [categoryLang]: {
+                              ...d.translations?.[categoryLang],
+                              title: val,
+                            },
+                          },
+                        }));
+                      }}
+                      placeholder={
+                        categoryDraft.title
+                          ? `EN: ${categoryDraft.title}`
+                          : categoryLang === 'pt'
+                            ? 'Bronze'
+                            : 'Bronze'
+                      }
+                      className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                      SUBTITLE LINE ({categoryLang.toUpperCase()})
+                    </label>
+                    <input
+                      type="text"
+                      value={
+                        categoryDraft.translations?.[categoryLang]?.categoryLine ?? ''
+                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCategoryDraft((d) => ({
+                          ...d,
+                          translations: {
+                            ...d.translations,
+                            [categoryLang]: {
+                              ...d.translations?.[categoryLang],
+                              categoryLine: val,
+                            },
+                          },
+                        }));
+                      }}
+                      placeholder={
+                        categoryDraft.categoryLine
+                          ? `EN: ${categoryDraft.categoryLine}`
+                          : ''
+                      }
+                      className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                      META LINE ({categoryLang.toUpperCase()})
+                    </label>
+                    <input
+                      type="text"
+                      value={categoryDraft.translations?.[categoryLang]?.metaLine ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCategoryDraft((d) => ({
+                          ...d,
+                          translations: {
+                            ...d.translations,
+                            [categoryLang]: {
+                              ...d.translations?.[categoryLang],
+                              metaLine: val,
+                            },
+                          },
+                        }));
+                      }}
+                      placeholder={
+                        categoryDraft.metaLine
+                          ? `EN: ${categoryDraft.metaLine}`
+                          : ''
+                      }
+                      className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                    />
+                  </div>
+                </>
               )}
-
-              <div>
-                <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                  SUBTITLE LINE *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={categoryDraft.categoryLine}
-                  onChange={(e) =>
-                    setCategoryDraft((d) => ({
-                      ...d,
-                      categoryLine: e.target.value,
-                    }))
-                  }
-                  placeholder="CAST METAL · PATINA & WEIGHT"
-                  className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                  META LINE
-                </label>
-                <input
-                  type="text"
-                  value={categoryDraft.metaLine}
-                  onChange={(e) =>
-                    setCategoryDraft((d) => ({ ...d, metaLine: e.target.value }))
-                  }
-                  placeholder="EDITION · EDITIONED WORKS"
-                  className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
-                />
-              </div>
 
               <ImageField
                 label="CATEGORY VERTICAL THUMBNAIL (3:4) *"
@@ -2071,6 +2548,29 @@ export function AdminPage({ onExit }: AdminPageProps) {
                         <h3 className="text-[16px] font-normal text-black truncate">
                           {work.title}
                         </h3>
+                        <div className="mt-1 flex items-center gap-1.5 font-mono text-[9px] tracking-[0.12em] uppercase">
+                          <span className="border border-black bg-black text-white px-1.5 py-0.5">
+                            EN
+                          </span>
+                          <span
+                            className={`border px-1.5 py-0.5 ${
+                              hasWorkLocale(work, 'pt') || Boolean(PT_PROJECTS[work.id])
+                                ? 'border-black text-black'
+                                : 'border-black/20 text-[#888888]'
+                            }`}
+                          >
+                            PT
+                          </span>
+                          <span
+                            className={`border px-1.5 py-0.5 ${
+                              hasWorkLocale(work, 'fr') || Boolean(FR_PROJECTS[work.id])
+                                ? 'border-black text-black'
+                                : 'border-black/20 text-[#888888]'
+                            }`}
+                          >
+                            FR
+                          </span>
+                        </div>
                       </div>
                       <div className="flex flex-col gap-1 shrink-0">
                         <button
@@ -2125,6 +2625,7 @@ export function AdminPage({ onExit }: AdminPageProps) {
             <form
               ref={workFormRef}
               onSubmit={handleSaveWork}
+              noValidate
               className="lg:col-span-7 border border-black/20 p-6 sm:p-8 space-y-6 bg-white"
             >
               <div className="flex items-center justify-between pb-4 border-b border-black/15">
@@ -2142,6 +2643,13 @@ export function AdminPage({ onExit }: AdminPageProps) {
                 )}
               </div>
 
+              <LanguageTabs
+                value={workLang}
+                onChange={setWorkLang}
+                hasPt={hasWorkLocale(workDraft, 'pt')}
+                hasFr={hasWorkLocale(workDraft, 'fr')}
+              />
+
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-5">
                 <div>
                   <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
@@ -2158,18 +2666,45 @@ export function AdminPage({ onExit }: AdminPageProps) {
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                    TITLE *
+                    {workLang === 'en'
+                      ? 'TITLE (EN) *'
+                      : `TITLE (${workLang.toUpperCase()} — OPTIONAL IF SAME)`}
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={workDraft.title}
-                    onChange={(e) =>
-                      setWorkDraft((d) => ({ ...d, title: e.target.value }))
-                    }
-                    placeholder="Sintra Monolith"
-                    className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
-                  />
+                  {workLang === 'en' ? (
+                    <input
+                      type="text"
+                      value={workDraft.title}
+                      onChange={(e) =>
+                        setWorkDraft((d) => ({ ...d, title: e.target.value }))
+                      }
+                      placeholder="Sintra Monolith"
+                      className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={workDraft.translations?.[workLang]?.title ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setWorkDraft((d) => ({
+                          ...d,
+                          translations: {
+                            ...d.translations,
+                            [workLang]: {
+                              ...d.translations?.[workLang],
+                              title: val,
+                            },
+                          },
+                        }));
+                      }}
+                      placeholder={
+                        workDraft.title
+                          ? `EN: ${workDraft.title}`
+                          : 'Localized title'
+                      }
+                      className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
@@ -2177,7 +2712,6 @@ export function AdminPage({ onExit }: AdminPageProps) {
                   </label>
                   <input
                     type="text"
-                    required
                     value={workDraft.year}
                     onChange={(e) =>
                       setWorkDraft((d) => ({ ...d, year: e.target.value }))
@@ -2254,52 +2788,186 @@ export function AdminPage({ onExit }: AdminPageProps) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                  <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                    MEDIUM
-                  </label>
-                  <input
-                    type="text"
-                    value={workDraft.medium}
-                    onChange={(e) =>
-                      setWorkDraft((d) => ({ ...d, medium: e.target.value }))
-                    }
-                    placeholder="OAK WOOD · STONE"
-                    className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                    CONTEXT / EXHIBITION
-                  </label>
-                  <input
-                    type="text"
-                    value={workDraft.context}
-                    onChange={(e) =>
-                      setWorkDraft((d) => ({ ...d, context: e.target.value }))
-                    }
-                    placeholder="ZET GALLERY · 2026"
-                    className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
-                  />
-                </div>
-              </div>
+              {workLang === 'en' ? (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        CATEGORY SUBTITLE (EN)
+                      </label>
+                      <input
+                        type="text"
+                        value={workDraft.categoryLine}
+                        onChange={(e) =>
+                          setWorkDraft((d) => ({
+                            ...d,
+                            categoryLine: e.target.value,
+                          }))
+                        }
+                        placeholder="SCULPTURE · MATERIALITY"
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        MEDIUM (EN)
+                      </label>
+                      <input
+                        type="text"
+                        value={workDraft.medium}
+                        onChange={(e) =>
+                          setWorkDraft((d) => ({ ...d, medium: e.target.value }))
+                        }
+                        placeholder="OAK WOOD · STONE"
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        CONTEXT / EXHIBITION (EN)
+                      </label>
+                      <input
+                        type="text"
+                        value={workDraft.context}
+                        onChange={(e) =>
+                          setWorkDraft((d) => ({ ...d, context: e.target.value }))
+                        }
+                        placeholder="ZET GALLERY · 2026"
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                      />
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                  LEAD DESCRIPTION *
-                </label>
-                <textarea
-                  rows={3}
-                  required
-                  value={workDraft.lead}
-                  onChange={(e) =>
-                    setWorkDraft((d) => ({ ...d, lead: e.target.value }))
-                  }
-                  placeholder="Concise description of the work..."
-                  className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none resize-y"
-                />
-              </div>
+                  <div>
+                    <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                      LEAD DESCRIPTION (EN) *
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={workDraft.lead}
+                      onChange={(e) =>
+                        setWorkDraft((d) => ({ ...d, lead: e.target.value }))
+                      }
+                      placeholder="Concise description of the work..."
+                      className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none resize-y"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        CATEGORY SUBTITLE ({workLang.toUpperCase()})
+                      </label>
+                      <input
+                        type="text"
+                        value={
+                          workDraft.translations?.[workLang]?.categoryLine ?? ''
+                        }
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setWorkDraft((d) => ({
+                            ...d,
+                            translations: {
+                              ...d.translations,
+                              [workLang]: {
+                                ...d.translations?.[workLang],
+                                categoryLine: val,
+                              },
+                            },
+                          }));
+                        }}
+                        placeholder={
+                          workDraft.categoryLine
+                            ? `EN: ${workDraft.categoryLine}`
+                            : ''
+                        }
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        MEDIUM ({workLang.toUpperCase()})
+                      </label>
+                      <input
+                        type="text"
+                        value={workDraft.translations?.[workLang]?.medium ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setWorkDraft((d) => ({
+                            ...d,
+                            translations: {
+                              ...d.translations,
+                              [workLang]: {
+                                ...d.translations?.[workLang],
+                                medium: val,
+                              },
+                            },
+                          }));
+                        }}
+                        placeholder={
+                          workDraft.medium ? `EN: ${workDraft.medium}` : ''
+                        }
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        CONTEXT ({workLang.toUpperCase()})
+                      </label>
+                      <input
+                        type="text"
+                        value={workDraft.translations?.[workLang]?.context ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setWorkDraft((d) => ({
+                            ...d,
+                            translations: {
+                              ...d.translations,
+                              [workLang]: {
+                                ...d.translations?.[workLang],
+                                context: val,
+                              },
+                            },
+                          }));
+                        }}
+                        placeholder={
+                          workDraft.context ? `EN: ${workDraft.context}` : ''
+                        }
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                      LEAD DESCRIPTION ({workLang.toUpperCase()})
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={workDraft.translations?.[workLang]?.lead ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setWorkDraft((d) => ({
+                          ...d,
+                          translations: {
+                            ...d.translations,
+                            [workLang]: {
+                              ...d.translations?.[workLang],
+                              lead: val,
+                            },
+                          },
+                        }));
+                      }}
+                      placeholder={
+                        workDraft.lead ? `EN: ${workDraft.lead}` : ''
+                      }
+                      className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none resize-y"
+                    />
+                  </div>
+                </>
+              )}
 
               <ImageField
                 label="PRIMARY ARTWORK IMAGE *"
@@ -2338,39 +3006,140 @@ export function AdminPage({ onExit }: AdminPageProps) {
 
               <div className="space-y-4 pt-2 border-t border-black/15">
                 <span className="block font-mono text-[10px] tracking-[0.14em] uppercase text-[#666666]">
-                  NOTES (MATERIAL · FORM · CONTEXT)
+                  NOTES ({workLang.toUpperCase()} · MATERIAL · FORM · CONTEXT)
                 </span>
-                {([0, 1, 2] as const).map((idx) => (
-                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                    <input
-                      type="text"
-                      value={workDraft.steps[idx].label}
-                      onChange={(e) =>
-                        setWorkDraft((d) => {
-                          const steps = d.steps.map((s, sIdx) =>
-                            sIdx === idx ? { ...s, label: e.target.value } : s,
-                          ) as ProjectItem['steps'];
-                          return { ...d, steps };
-                        })
-                      }
-                      className="border-b border-black/25 focus:border-black py-1.5 font-mono text-[11px] uppercase focus:outline-none"
-                    />
-                    <input
-                      type="text"
-                      value={workDraft.steps[idx].text}
-                      onChange={(e) =>
-                        setWorkDraft((d) => {
-                          const steps = d.steps.map((s, sIdx) =>
-                            sIdx === idx ? { ...s, text: e.target.value } : s,
-                          ) as ProjectItem['steps'];
-                          return { ...d, steps };
-                        })
-                      }
-                      placeholder="Optional note (defaults to lead description if left blank)"
-                      className="sm:col-span-3 border-b border-black/25 focus:border-black py-1.5 text-[13px] focus:outline-none"
-                    />
-                  </div>
-                ))}
+                {([0, 1, 2] as const).map((idx) => {
+                  const defaultLocalizedLabel =
+                    workLang === 'pt'
+                      ? idx === 0
+                        ? 'Matéria'
+                        : idx === 1
+                          ? 'Forma'
+                          : 'Contexto'
+                      : idx === 0
+                        ? 'Matière'
+                        : idx === 1
+                          ? 'Forme'
+                          : 'Contexte';
+
+                  const currentStep =
+                    workLang === 'en'
+                      ? workDraft.steps[idx]
+                      : (workDraft.translations?.[workLang]?.steps?.[idx] ?? {
+                          label: defaultLocalizedLabel,
+                          text: '',
+                        });
+
+                  return (
+                    <div key={idx} className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                      <input
+                        type="text"
+                        value={currentStep.label}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (workLang === 'en') {
+                            setWorkDraft((d) => {
+                              const steps = d.steps.map((s, sIdx) =>
+                                sIdx === idx ? { ...s, label: val } : s,
+                              ) as ProjectItem['steps'];
+                              return { ...d, steps };
+                            });
+                          } else {
+                            setWorkDraft((d) => {
+                              const prevLoc = d.translations?.[workLang] ?? {};
+                              const prevSteps: ProjectItem['steps'] =
+                                prevLoc.steps ?? [
+                                  {
+                                    label: workLang === 'pt' ? 'Matéria' : 'Matière',
+                                    text: '',
+                                  },
+                                  {
+                                    label: workLang === 'pt' ? 'Forma' : 'Forme',
+                                    text: '',
+                                  },
+                                  {
+                                    label:
+                                      workLang === 'pt' ? 'Contexto' : 'Contexte',
+                                    text: '',
+                                  },
+                                ];
+                              const nextSteps = prevSteps.map((s, sIdx) =>
+                                sIdx === idx ? { ...s, label: val } : s,
+                              ) as ProjectItem['steps'];
+                              return {
+                                ...d,
+                                translations: {
+                                  ...d.translations,
+                                  [workLang]: {
+                                    ...prevLoc,
+                                    steps: nextSteps,
+                                  },
+                                },
+                              };
+                            });
+                          }
+                        }}
+                        className="border-b border-black/25 focus:border-black py-1.5 font-mono text-[11px] uppercase focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        value={currentStep.text}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (workLang === 'en') {
+                            setWorkDraft((d) => {
+                              const steps = d.steps.map((s, sIdx) =>
+                                sIdx === idx ? { ...s, text: val } : s,
+                              ) as ProjectItem['steps'];
+                              return { ...d, steps };
+                            });
+                          } else {
+                            setWorkDraft((d) => {
+                              const prevLoc = d.translations?.[workLang] ?? {};
+                              const prevSteps: ProjectItem['steps'] =
+                                prevLoc.steps ?? [
+                                  {
+                                    label: workLang === 'pt' ? 'Matéria' : 'Matière',
+                                    text: '',
+                                  },
+                                  {
+                                    label: workLang === 'pt' ? 'Forma' : 'Forme',
+                                    text: '',
+                                  },
+                                  {
+                                    label:
+                                      workLang === 'pt' ? 'Contexto' : 'Contexte',
+                                    text: '',
+                                  },
+                                ];
+                              const nextSteps = prevSteps.map((s, sIdx) =>
+                                sIdx === idx ? { ...s, text: val } : s,
+                              ) as ProjectItem['steps'];
+                              return {
+                                ...d,
+                                translations: {
+                                  ...d.translations,
+                                  [workLang]: {
+                                    ...prevLoc,
+                                    steps: nextSteps,
+                                  },
+                                },
+                              };
+                            });
+                          }
+                        }}
+                        placeholder={
+                          workLang === 'en'
+                            ? 'Optional note (defaults to lead description if left blank)'
+                            : workDraft.steps[idx]?.text
+                              ? `EN: ${workDraft.steps[idx].text}`
+                              : ''
+                        }
+                        className="sm:col-span-3 border-b border-black/25 focus:border-black py-1.5 text-[13px] focus:outline-none"
+                      />
+                    </div>
+                  );
+                })}
               </div>
 
               <label className="inline-flex items-center gap-2.5 font-mono text-[11px] tracking-[0.1em] uppercase cursor-pointer">
@@ -2452,6 +3221,31 @@ export function AdminPage({ onExit }: AdminPageProps) {
                         <h3 className="text-[16px] font-normal text-black line-clamp-2">
                           {entry.title}
                         </h3>
+                        <div className="mt-1.5 flex items-center gap-1.5 font-mono text-[9px] tracking-[0.12em] uppercase">
+                          <span className="border border-black bg-black text-white px-1.5 py-0.5">
+                            EN
+                          </span>
+                          <span
+                            className={`border px-1.5 py-0.5 ${
+                              hasJournalLocale(entry, 'pt') ||
+                              Boolean(UI_TRANSLATIONS.pt.journal.entries[entry.id])
+                                ? 'border-black text-black'
+                                : 'border-black/20 text-[#888888]'
+                            }`}
+                          >
+                            PT
+                          </span>
+                          <span
+                            className={`border px-1.5 py-0.5 ${
+                              hasJournalLocale(entry, 'fr') ||
+                              Boolean(UI_TRANSLATIONS.fr.journal.entries[entry.id])
+                                ? 'border-black text-black'
+                                : 'border-black/20 text-[#888888]'
+                            }`}
+                          >
+                            FR
+                          </span>
+                        </div>
                       </div>
                       <div className="flex flex-col gap-1.5 shrink-0">
                         <button
@@ -2506,6 +3300,7 @@ export function AdminPage({ onExit }: AdminPageProps) {
             <form
               ref={journalFormRef}
               onSubmit={handleSaveJournal}
+              noValidate
               className="lg:col-span-7 border border-black/20 p-6 sm:p-8 space-y-6 bg-white"
             >
               <div className="flex items-center justify-between pb-4 border-b border-black/15">
@@ -2524,6 +3319,21 @@ export function AdminPage({ onExit }: AdminPageProps) {
                   </button>
                 )}
               </div>
+
+              <LanguageTabs
+                value={journalLang}
+                onChange={setJournalLang}
+                hasPt={
+                  hasJournalLocale(journalDraft, 'pt') ||
+                  Boolean(journalIntroLangText.pt.trim()) ||
+                  Boolean(journalDetailsLangText.pt.trim())
+                }
+                hasFr={
+                  hasJournalLocale(journalDraft, 'fr') ||
+                  Boolean(journalIntroLangText.fr.trim()) ||
+                  Boolean(journalDetailsLangText.fr.trim())
+                }
+              />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
@@ -2547,51 +3357,125 @@ export function AdminPage({ onExit }: AdminPageProps) {
 
                 <div>
                   <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                    DATE OR VENUE TAG *
+                    DATE OR VENUE TAG ({journalLang.toUpperCase()})
+                    {journalLang === 'en' ? ' *' : ''}
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={journalDraft.date}
-                    onChange={(e) =>
-                      setJournalDraft((d) => ({ ...d, date: e.target.value }))
-                    }
-                    placeholder="NOVEMBER 2026 · BRAGA"
-                    className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
-                  />
+                  {journalLang === 'en' ? (
+                    <input
+                      type="text"
+                      value={journalDraft.date}
+                      onChange={(e) =>
+                        setJournalDraft((d) => ({ ...d, date: e.target.value }))
+                      }
+                      placeholder="NOVEMBER 2026 · BRAGA"
+                      className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={journalDraft.translations?.[journalLang]?.date ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setJournalDraft((d) => ({
+                          ...d,
+                          translations: {
+                            ...d.translations,
+                            [journalLang]: {
+                              ...d.translations?.[journalLang],
+                              date: val,
+                            },
+                          },
+                        }));
+                      }}
+                      placeholder={
+                        journalDraft.date ? `EN: ${journalDraft.date}` : ''
+                      }
+                      className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                    />
+                  )}
                 </div>
               </div>
 
               <div>
                 <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                  ARTICLE TITLE *
+                  ARTICLE TITLE ({journalLang.toUpperCase()})
+                  {journalLang === 'en' ? ' *' : ''}
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={journalDraft.title}
-                  onChange={(e) =>
-                    setJournalDraft((d) => ({ ...d, title: e.target.value }))
-                  }
-                  placeholder="Exhibition or Publication Title"
-                  className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
-                />
+                {journalLang === 'en' ? (
+                  <input
+                    type="text"
+                    value={journalDraft.title}
+                    onChange={(e) =>
+                      setJournalDraft((d) => ({ ...d, title: e.target.value }))
+                    }
+                    placeholder="Exhibition or Publication Title"
+                    className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    value={journalDraft.translations?.[journalLang]?.title ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setJournalDraft((d) => ({
+                        ...d,
+                        translations: {
+                          ...d.translations,
+                          [journalLang]: {
+                            ...d.translations?.[journalLang],
+                            title: val,
+                          },
+                        },
+                      }));
+                    }}
+                    placeholder={
+                      journalDraft.title ? `EN: ${journalDraft.title}` : ''
+                    }
+                    className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                  />
+                )}
               </div>
 
               <div>
                 <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                  LEAD SUBTITLE *
+                  LEAD SUBTITLE ({journalLang.toUpperCase()})
+                  {journalLang === 'en' ? ' *' : ''}
                 </label>
-                <textarea
-                  rows={2}
-                  required
-                  value={journalDraft.subtitle}
-                  onChange={(e) =>
-                    setJournalDraft((d) => ({ ...d, subtitle: e.target.value }))
-                  }
-                  placeholder="Short editorial summary..."
-                  className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none resize-y"
-                />
+                {journalLang === 'en' ? (
+                  <textarea
+                    rows={2}
+                    value={journalDraft.subtitle}
+                    onChange={(e) =>
+                      setJournalDraft((d) => ({ ...d, subtitle: e.target.value }))
+                    }
+                    placeholder="Short editorial summary..."
+                    className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none resize-y"
+                  />
+                ) : (
+                  <textarea
+                    rows={2}
+                    value={
+                      journalDraft.translations?.[journalLang]?.subtitle ?? ''
+                    }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setJournalDraft((d) => ({
+                        ...d,
+                        translations: {
+                          ...d.translations,
+                          [journalLang]: {
+                            ...d.translations?.[journalLang],
+                            subtitle: val,
+                          },
+                        },
+                      }));
+                    }}
+                    placeholder={
+                      journalDraft.subtitle ? `EN: ${journalDraft.subtitle}` : ''
+                    }
+                    className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none resize-y"
+                  />
+                )}
               </div>
 
               <ImageField
@@ -2604,164 +3488,464 @@ export function AdminPage({ onExit }: AdminPageProps) {
                 cloudinaryConfigured={cloudinaryConfigured}
               />
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                  <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                    CREDIT LABEL
-                  </label>
-                  <input
-                    type="text"
-                    value={journalDraft.creditLabel}
-                    onChange={(e) =>
-                      setJournalDraft((d) => ({
-                        ...d,
-                        creditLabel: e.target.value,
-                      }))
-                    }
-                    className="w-full border-b border-black/25 focus:border-black py-2 text-[13px] focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                    CREDIT VALUE
-                  </label>
-                  <input
-                    type="text"
-                    value={journalDraft.creditValue}
-                    onChange={(e) =>
-                      setJournalDraft((d) => ({
-                        ...d,
-                        creditValue: e.target.value,
-                      }))
-                    }
-                    className="w-full border-b border-black/25 focus:border-black py-2 text-[13px] focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                    SECONDARY LABEL
-                  </label>
-                  <input
-                    type="text"
-                    value={journalDraft.secondaryLabel}
-                    onChange={(e) =>
-                      setJournalDraft((d) => ({
-                        ...d,
-                        secondaryLabel: e.target.value,
-                      }))
-                    }
-                    className="w-full border-b border-black/25 focus:border-black py-2 text-[13px] focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                    SECONDARY VALUE
-                  </label>
-                  <input
-                    type="text"
-                    value={journalDraft.secondaryValue}
-                    onChange={(e) =>
-                      setJournalDraft((d) => ({
-                        ...d,
-                        secondaryValue: e.target.value,
-                      }))
-                    }
-                    className="w-full border-b border-black/25 focus:border-black py-2 text-[13px] focus:outline-none"
-                  />
-                </div>
-              </div>
+              {journalLang === 'en' ? (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        CREDIT LABEL (EN)
+                      </label>
+                      <input
+                        type="text"
+                        value={journalDraft.creditLabel}
+                        onChange={(e) =>
+                          setJournalDraft((d) => ({
+                            ...d,
+                            creditLabel: e.target.value,
+                          }))
+                        }
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[13px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        CREDIT VALUE (EN)
+                      </label>
+                      <input
+                        type="text"
+                        value={journalDraft.creditValue}
+                        onChange={(e) =>
+                          setJournalDraft((d) => ({
+                            ...d,
+                            creditValue: e.target.value,
+                          }))
+                        }
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[13px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        SECONDARY LABEL (EN)
+                      </label>
+                      <input
+                        type="text"
+                        value={journalDraft.secondaryLabel}
+                        onChange={(e) =>
+                          setJournalDraft((d) => ({
+                            ...d,
+                            secondaryLabel: e.target.value,
+                          }))
+                        }
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[13px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        SECONDARY VALUE (EN)
+                      </label>
+                      <input
+                        type="text"
+                        value={journalDraft.secondaryValue}
+                        onChange={(e) =>
+                          setJournalDraft((d) => ({
+                            ...d,
+                            secondaryValue: e.target.value,
+                          }))
+                        }
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[13px] focus:outline-none"
+                      />
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                  INTRO PARAGRAPHS (SEPARATE PARAGRAPHS WITH BLANK LINE)
-                </label>
-                <textarea
-                  rows={4}
-                  value={introText}
-                  onChange={(e) => setIntroText(e.target.value)}
-                  placeholder="Opening editorial text..."
-                  className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none resize-y"
-                />
-              </div>
+                  <div>
+                    <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                      INTRO PARAGRAPHS (EN — SEPARATE PARAGRAPHS WITH BLANK LINE)
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={introText}
+                      onChange={(e) => setIntroText(e.target.value)}
+                      placeholder="Opening editorial text..."
+                      className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none resize-y"
+                    />
+                  </div>
 
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                    LARGE HEADING
-                  </label>
-                  <input
-                    type="text"
-                    value={journalDraft.largeHeading}
-                    onChange={(e) =>
-                      setJournalDraft((d) => ({
-                        ...d,
-                        largeHeading: e.target.value,
-                      }))
-                    }
-                    placeholder="Spatial grammar and material"
-                    className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                    LARGE HEADING BODY
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={journalDraft.largeHeadingText}
-                    onChange={(e) =>
-                      setJournalDraft((d) => ({
-                        ...d,
-                        largeHeadingText: e.target.value,
-                      }))
-                    }
-                    className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none resize-y"
-                  />
-                </div>
-                <div>
-                  <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                    SUB HEADING
-                  </label>
-                  <input
-                    type="text"
-                    value={journalDraft.subHeading}
-                    onChange={(e) =>
-                      setJournalDraft((d) => ({
-                        ...d,
-                        subHeading: e.target.value,
-                      }))
-                    }
-                    className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                    SUB HEADING BODY
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={journalDraft.subHeadingText}
-                    onChange={(e) =>
-                      setJournalDraft((d) => ({
-                        ...d,
-                        subHeadingText: e.target.value,
-                      }))
-                    }
-                    className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none resize-y"
-                  />
-                </div>
-                <div>
-                  <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
-                    ARCHIVE SUMMARY NOTES (ONE PER LINE)
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={detailsText}
-                    onChange={(e) => setDetailsText(e.target.value)}
-                    className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none resize-y"
-                  />
-                </div>
-              </div>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        LARGE HEADING (EN)
+                      </label>
+                      <input
+                        type="text"
+                        value={journalDraft.largeHeading}
+                        onChange={(e) =>
+                          setJournalDraft((d) => ({
+                            ...d,
+                            largeHeading: e.target.value,
+                          }))
+                        }
+                        placeholder="Spatial grammar and material"
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        LARGE HEADING BODY (EN)
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={journalDraft.largeHeadingText}
+                        onChange={(e) =>
+                          setJournalDraft((d) => ({
+                            ...d,
+                            largeHeadingText: e.target.value,
+                          }))
+                        }
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none resize-y"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        SUB HEADING (EN)
+                      </label>
+                      <input
+                        type="text"
+                        value={journalDraft.subHeading}
+                        onChange={(e) =>
+                          setJournalDraft((d) => ({
+                            ...d,
+                            subHeading: e.target.value,
+                          }))
+                        }
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        SUB HEADING BODY (EN)
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={journalDraft.subHeadingText}
+                        onChange={(e) =>
+                          setJournalDraft((d) => ({
+                            ...d,
+                            subHeadingText: e.target.value,
+                          }))
+                        }
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none resize-y"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        ARCHIVE SUMMARY NOTES (EN — ONE PER LINE)
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={detailsText}
+                        onChange={(e) => setDetailsText(e.target.value)}
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none resize-y"
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        CREDIT LABEL ({journalLang.toUpperCase()})
+                      </label>
+                      <input
+                        type="text"
+                        value={
+                          journalDraft.translations?.[journalLang]?.creditLabel ??
+                          ''
+                        }
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setJournalDraft((d) => ({
+                            ...d,
+                            translations: {
+                              ...d.translations,
+                              [journalLang]: {
+                                ...d.translations?.[journalLang],
+                                creditLabel: val,
+                              },
+                            },
+                          }));
+                        }}
+                        placeholder={
+                          journalDraft.creditLabel
+                            ? `EN: ${journalDraft.creditLabel}`
+                            : ''
+                        }
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[13px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        CREDIT VALUE ({journalLang.toUpperCase()})
+                      </label>
+                      <input
+                        type="text"
+                        value={
+                          journalDraft.translations?.[journalLang]?.creditValue ??
+                          ''
+                        }
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setJournalDraft((d) => ({
+                            ...d,
+                            translations: {
+                              ...d.translations,
+                              [journalLang]: {
+                                ...d.translations?.[journalLang],
+                                creditValue: val,
+                              },
+                            },
+                          }));
+                        }}
+                        placeholder={
+                          journalDraft.creditValue
+                            ? `EN: ${journalDraft.creditValue}`
+                            : ''
+                        }
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[13px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        SECONDARY LABEL ({journalLang.toUpperCase()})
+                      </label>
+                      <input
+                        type="text"
+                        value={
+                          journalDraft.translations?.[journalLang]
+                            ?.secondaryLabel ?? ''
+                        }
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setJournalDraft((d) => ({
+                            ...d,
+                            translations: {
+                              ...d.translations,
+                              [journalLang]: {
+                                ...d.translations?.[journalLang],
+                                secondaryLabel: val,
+                              },
+                            },
+                          }));
+                        }}
+                        placeholder={
+                          journalDraft.secondaryLabel
+                            ? `EN: ${journalDraft.secondaryLabel}`
+                            : ''
+                        }
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[13px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        SECONDARY VALUE ({journalLang.toUpperCase()})
+                      </label>
+                      <input
+                        type="text"
+                        value={
+                          journalDraft.translations?.[journalLang]
+                            ?.secondaryValue ?? ''
+                        }
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setJournalDraft((d) => ({
+                            ...d,
+                            translations: {
+                              ...d.translations,
+                              [journalLang]: {
+                                ...d.translations?.[journalLang],
+                                secondaryValue: val,
+                              },
+                            },
+                          }));
+                        }}
+                        placeholder={
+                          journalDraft.secondaryValue
+                            ? `EN: ${journalDraft.secondaryValue}`
+                            : ''
+                        }
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[13px] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                      INTRO PARAGRAPHS ({journalLang.toUpperCase()} — SEPARATE WITH BLANK LINE)
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={journalIntroLangText[journalLang]}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setJournalIntroLangText((prev) => ({
+                          ...prev,
+                          [journalLang]: val,
+                        }));
+                      }}
+                      placeholder={
+                        introText ? `EN: ${introText.slice(0, 140)}...` : ''
+                      }
+                      className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none resize-y"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        LARGE HEADING ({journalLang.toUpperCase()})
+                      </label>
+                      <input
+                        type="text"
+                        value={
+                          journalDraft.translations?.[journalLang]?.largeHeading ??
+                          ''
+                        }
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setJournalDraft((d) => ({
+                            ...d,
+                            translations: {
+                              ...d.translations,
+                              [journalLang]: {
+                                ...d.translations?.[journalLang],
+                                largeHeading: val,
+                              },
+                            },
+                          }));
+                        }}
+                        placeholder={
+                          journalDraft.largeHeading
+                            ? `EN: ${journalDraft.largeHeading}`
+                            : ''
+                        }
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        LARGE HEADING BODY ({journalLang.toUpperCase()})
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={
+                          journalDraft.translations?.[journalLang]
+                            ?.largeHeadingText ?? ''
+                        }
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setJournalDraft((d) => ({
+                            ...d,
+                            translations: {
+                              ...d.translations,
+                              [journalLang]: {
+                                ...d.translations?.[journalLang],
+                                largeHeadingText: val,
+                              },
+                            },
+                          }));
+                        }}
+                        placeholder={
+                          journalDraft.largeHeadingText
+                            ? `EN: ${journalDraft.largeHeadingText.slice(0, 120)}...`
+                            : ''
+                        }
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none resize-y"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        SUB HEADING ({journalLang.toUpperCase()})
+                      </label>
+                      <input
+                        type="text"
+                        value={
+                          journalDraft.translations?.[journalLang]?.subHeading ?? ''
+                        }
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setJournalDraft((d) => ({
+                            ...d,
+                            translations: {
+                              ...d.translations,
+                              [journalLang]: {
+                                ...d.translations?.[journalLang],
+                                subHeading: val,
+                              },
+                            },
+                          }));
+                        }}
+                        placeholder={
+                          journalDraft.subHeading
+                            ? `EN: ${journalDraft.subHeading}`
+                            : ''
+                        }
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        SUB HEADING BODY ({journalLang.toUpperCase()})
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={
+                          journalDraft.translations?.[journalLang]
+                            ?.subHeadingText ?? ''
+                        }
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setJournalDraft((d) => ({
+                            ...d,
+                            translations: {
+                              ...d.translations,
+                              [journalLang]: {
+                                ...d.translations?.[journalLang],
+                                subHeadingText: val,
+                              },
+                            },
+                          }));
+                        }}
+                        placeholder={
+                          journalDraft.subHeadingText
+                            ? `EN: ${journalDraft.subHeadingText.slice(0, 120)}...`
+                            : ''
+                        }
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none resize-y"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666] mb-1">
+                        ARCHIVE SUMMARY NOTES ({journalLang.toUpperCase()} — ONE PER LINE)
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={journalDetailsLangText[journalLang]}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setJournalDetailsLangText((prev) => ({
+                            ...prev,
+                            [journalLang]: val,
+                          }));
+                        }}
+                        placeholder={
+                          detailsText ? `EN: ${detailsText.slice(0, 100)}...` : ''
+                        }
+                        className="w-full border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none resize-y"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
               <label className="inline-flex items-center gap-2.5 font-mono text-[11px] tracking-[0.1em] uppercase cursor-pointer">
                 <input

@@ -25,15 +25,15 @@ export function PortfolioCataloguePage({
   const { categories, projects } = usePortfolioData();
   const t = UI_TRANSLATIONS[language].portfolio;
 
+  const categoryMap = new Map(categories.map((c) => [c.id, c]));
+
   const filterTabs: Array<{ id: PortfolioCategoryId; label: string }> = [
     { id: 'ALL', label: getCategoryFilterLabel('ALL', language) },
     ...categories.map((cat) => ({
       id: cat.id,
-      label: getCategoryFilterLabel(cat.id, language, cat.title),
+      label: getCategoryFilterLabel(cat.id, language, cat.title, cat),
     })),
   ];
-
-  const categoryTitleMap = new Map(categories.map((c) => [c.id, c.title]));
 
   const filteredWorks = (
     activeCategory === 'ALL'
@@ -120,7 +120,8 @@ export function PortfolioCataloguePage({
                   {getCategoryFilterLabel(
                     leadWork.portfolioCategory,
                     language,
-                    categoryTitleMap.get(leadWork.portfolioCategory),
+                    categoryMap.get(leadWork.portfolioCategory)?.title,
+                    categoryMap.get(leadWork.portfolioCategory),
                   )}
                 </span>
               </div>
@@ -186,7 +187,8 @@ export function PortfolioCataloguePage({
                       {getCategoryFilterLabel(
                         work.portfolioCategory,
                         language,
-                        categoryTitleMap.get(work.portfolioCategory),
+                        categoryMap.get(work.portfolioCategory)?.title,
+                        categoryMap.get(work.portfolioCategory),
                       )}
                     </span>
                   </div>

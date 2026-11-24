@@ -36,6 +36,12 @@ const HOME_META: Record<
       'Explore esculturas em carvalho e pedra, instalações espaciais, exposições e obras de novos media de Volker Schnüttgen em Sintra, Portugal.',
     locale: 'pt_PT',
   },
+  fr: {
+    title: 'Volker Schnüttgen — Sculpteur & Artiste Nouveaux Médias | Sintra',
+    description:
+      'Découvrez les sculptures en chêne et pierre, installations spatiales, expositions et œuvres nouveaux médias de Volker Schnüttgen à Sintra, Portugal.',
+    locale: 'fr_FR',
+  },
   de: {
     title: 'Volker Schnüttgen — Bildhauer & Medienkünstler | Sintra',
     description:
@@ -90,6 +96,28 @@ const FAQ_BY_LANGUAGE: Record<
       question: 'Como contactar para exposições, encomendas ou aquisições?',
       answer:
         'Volker Schnüttgen é representado pela zet gallery. Pedidos curatoriais, institucionais ou de galeria podem ser enviados pelo formulário de contacto do site ou para mail@volker-schnuettgen.com.',
+    },
+  ],
+  fr: [
+    {
+      question: 'Qui est Volker Schnüttgen ?',
+      answer:
+        'Volker Schnüttgen (né en 1961 à Attendorn, Allemagne) est un sculpteur et artiste nouveaux médias installé en permanence à Sintra, au Portugal, depuis 1993. Il a étudié à l’Université des Arts de Brême (1982) et obtenu un Master en Art Multimédia à la FBAUP (2008).',
+    },
+    {
+      question: 'Avec quels matériaux et médiums travaille Volker Schnüttgen ?',
+      answer:
+        'Son œuvre privilégie le bois de chêne lié au territoire, la pierre naturelle et l’acier plié, ainsi que l’installation spatiale, la gravure, des performances interdisciplinaires telles que Habitat (2010) et les nouveaux médias interactifs.',
+    },
+    {
+      question: 'Où se situe l’atelier de Volker Schnüttgen ?',
+      answer:
+        'Son atelier est établi en permanence à Sintra, Portugal, depuis 1993. De 2010 à 2016, il a également enseigné la sculpture à la Faculté des Beaux-Arts de l’Université de Porto (FBAUP).',
+    },
+    {
+      question: 'Qui représente Volker Schnüttgen pour les expositions et acquisitions ?',
+      answer:
+        'Volker Schnüttgen est représenté par la zet gallery. Les demandes curatoriales, institutionnelles ou de galerie peuvent être envoyées via la section Contact ou à mail@volker-schnuettgen.com.',
     },
   ],
   de: [
@@ -333,6 +361,7 @@ export function SeoHead({
     if (!isAdminRoute) {
       upsertLink('alternate', `${origin}/`, 'en');
       upsertLink('alternate', `${origin}/?lang=pt`, 'pt');
+      upsertLink('alternate', `${origin}/?lang=fr`, 'fr');
       upsertLink('alternate', `${origin}/?lang=de`, 'de');
       upsertLink('alternate', `${origin}/`, 'x-default');
     }

@@ -1041,6 +1041,300 @@ export const UI_TRANSLATIONS: Record<Language, UIStrings> = {
         'KONTAKT: MAIL@VOLKER-SCHNUETTGEN.COM · +351 962 370 193 · SINTRA, PORTUGAL',
     },
   },
+
+  fr: {
+    sidebar: {
+      ariaNav: 'Navigation par sections du portfolio',
+      ariaHome: 'Volker Schnüttgen — Retour à l’index',
+      elevation: 'ÉLÉVATION',
+      floors: {
+        index: 'INDEX',
+        projects: 'PROJETS',
+        practice: 'PRATIQUE',
+        studio: 'BIOGRAPHIE',
+        journal: 'EXPOSITIONS',
+        contact: 'CONTACT',
+      },
+    },
+    hero: {
+      role: 'SCULPTEUR · ARTISTE NOUVEAUX MÉDIAS',
+      origin: 'ATTENDORN, 1961 / SINTRA, PORTUGAL',
+    },
+    portfolio: {
+      eyebrow: 'INDEX 01–04 — PORTFOLIO',
+      title: 'Portfolio',
+      subtitle:
+        'Quatre catégories entre pierre, bois, acier et nouveaux médias. Sélectionnez un médium pour explorer les œuvres.',
+      allWorksBtn: 'TOUTES LES ŒUVRES',
+      catalogueEyebrow: 'PORTFOLIO 01–17 — ŒUVRES',
+      catalogueSubtitle:
+        'Œuvres en pierre, bois de chêne, acier et installation multimédia. Sélectionnez une œuvre pour ouvrir sa fiche complète.',
+      filters: {
+        ALL: 'TOUTES',
+        STONE: 'PIERRE',
+        WOOD: 'BOIS',
+        STEEL: 'ACIER',
+        'MEDIA / INSTALLATION': 'MÉDIAS / INSTALLATION',
+      },
+      categories: {
+        STONE: {
+          title: 'Pierre',
+          categoryLine: 'SCULPTURE · MONOLITHES & ŒUVRE PUBLIQUE EN PIERRE',
+          metaLine: 'FORME ARCHAÏQUE · GRAVITÉ · LIEU',
+        },
+        WOOD: {
+          title: 'Bois',
+          categoryLine: 'BOIS DE CHÊNE · TRONCS & VOLUMES TAILLÉS',
+          metaLine: 'MATIÈRE TERRITORIALE · INCISION',
+        },
+        STEEL: {
+          title: 'Acier',
+          categoryLine: 'PLANS PLIÉS · SCULPTURE STRUCTURELLE',
+          metaLine: 'TENSION GÉOMÉTRIQUE · ESPACE OUVERT',
+        },
+        'MEDIA / INSTALLATION': {
+          title: 'Médias / Installation',
+          categoryLine: 'INSTALLATION SPATIALE · MÉDIAS INTERACTIFS',
+          metaLine: 'SCULPTURE · PERFORMANCE · SON',
+        },
+      },
+    },
+    projectDetail: {
+      location: 'LIEU',
+      year: 'ANNÉE',
+      typology: 'TYPOLOGIE',
+      medium: 'MÉDIUM',
+      context: 'CONTEXTE',
+      sectionLabel: 'COUPE A–A',
+      approachLabel: 'APPROCHE',
+      approachHeading: 'Matière, forme, espace',
+      approachSubtitle: 'La structure de l’œuvre, en trois notes.',
+      nextWork: 'Œuvre suivante',
+      allWorks: 'Toutes les œuvres',
+      typologyValues: {
+        SCULPTURE: 'SCULPTURE',
+        INSTALLATION: 'INSTALLATION',
+        'SITE & PUBLIC': 'IN SITU & PUBLIC',
+        SERIES: 'SÉRIE',
+      },
+    },
+    practice: {
+      eyebrow: 'NIVEAU M — PRATIQUE',
+      title: 'Pratique',
+      subtitle:
+        'Sculpture, installation, performance, gravure et nouveaux médias entre territoire et espace.',
+      disciplines: {
+        sculpture: {
+          title: 'Sculpture',
+          description:
+            'Œuvres façonnées principalement dans le chêne et la pierre liés au territoire. Minimaliste dans sa forme et attentive au détail, chaque sculpture établit un signe, marque le lieu et ouvre un espace symbolique enraciné dans la figuration archaïque et la géométrie des dolmens.',
+          tags: ['BOIS DE CHÊNE', 'PIERRE', 'FORME ARCHAÏQUE', 'ESPACE SYMBOLIQUE'],
+        },
+        installation: {
+          title: 'Installation',
+          description:
+            'Ensembles spatiaux où les volumes sculpturaux structurent une salle entière ou un paysage, invitant à la découverte par l’échelle, la proportion et une tension formelle silencieuse.',
+          tags: ['DESIGN SPATIAL', 'MARQUAGE DE SITE', 'PROPORTION', 'HABITAT'],
+        },
+        performance: {
+          title: 'Performance & Collaboration',
+          description:
+            'Productions interdisciplinaires unissant sculpture, chorégraphie et son — illustrées par Habitat (2010), coproduite avec le collectif de danse LaborGras au Radialsystem V, Berlin.',
+          tags: ['LABORGRAS', 'DANSE', 'PAYSAGE SONORE', 'RADIALSYSTEM V'],
+        },
+        engraving: {
+          title: 'Gravure',
+          description:
+            'Ancrée dans ses études de sculpture et de gravure commencées en 1982 à l’Université des Arts de Brême, portée par la précision du trait, l’incision et la discipline de surface.',
+          tags: ['BRÊME 1982', 'INCISION', 'SURFACE', 'ESTAMPE'],
+        },
+        'new-media': {
+          title: 'Nouveaux Médias',
+          description:
+            'Systèmes interactifs et œuvres temporelles nourris par sa bourse de la Fondation Calouste Gulbenkian à Berlin (2004) et son Master en Art Multimédia à la FBAUP (2008).',
+          tags: ['ART MÉDIA', 'FBAUP 2008', 'BERLIN 2004', 'INTERACTIF'],
+        },
+      },
+    },
+    studio: {
+      eyebrow: 'NIVEAU 00 — BIOGRAPHIE',
+      title: 'Biographie',
+      subtitle: 'Sintra, Portugal depuis 1993. Représenté par la zet gallery.',
+      bio: 'Né à Attendorn, en Allemagne, en 1961, Volker Schnüttgen entreprend des études de sculpture et de gravure à l’Université des Arts de Brême en 1982 et obtient son Master en Art Multimédia à la FBAUP en 2008. Lauréat d’une bourse du ministère portugais des Affaires étrangères (1992), du Prix Culturel du Conseil d’Olpe (1999), d’une bourse de la Fondation Calouste Gulbenkian à Berlin (2004) et soutenu par le Capital Berlin Cultural Fund (2010), il vit et travaille en permanence à Sintra depuis 1993.',
+      groundFloor: 'REZ-DE-CHAUSSÉE',
+      caption: 'ATELIER DE SINTRA — ÉTUDE SPATIALE & ARCHIVE',
+      openShuttersAria: 'Ouvrir les volets de l’archive d’atelier',
+      closeShuttersAria: 'Fermer les volets de l’archive d’atelier',
+      statLabels: [
+        'NÉ À ATTENDORN, ALLEMAGNE',
+        'VIT & TRAVAILLE À SINTRA',
+        'PROFESSEUR DE SCULPTURE À LA FBAUP',
+        'EXPOSITIONS & CONCOURS DEPUIS',
+      ],
+    },
+    journal: {
+      eyebrow: 'NIVEAU B1 — EXPOSITIONS & PUBLICATIONS',
+      title: 'Expositions',
+      subtitle: 'Sélection d’expositions curatoriales, dialogues et publications monographiques.',
+      allEntriesBtn: 'TOUTES LES EXPOSITIONS ET LIVRES',
+      nextEntry: 'Entrée suivante',
+      allEntriesLink: 'Toutes les entrées',
+      categories: {
+        EXHIBITION: 'EXPOSITION',
+        PUBLICATION: 'PUBLICATION',
+      },
+      entries: {
+        'geography-of-mysteries': {
+          date: 'CENTRO CULTURAL DE CASCAIS',
+          title: 'A Geography of Mysteries — Centro Cultural de Cascais',
+          subtitle:
+            'Commissariat d’Helena Mendes Pereira (zet gallery). Organisée en quatre espaces distincts correspondant à des séries dédiées d’œuvres de Volker Schnüttgen.',
+          creditLabel: 'COMMISSARIAT',
+          creditValue: 'HELENA MENDES PEREIRA (ZET GALLERY)',
+          secondaryLabel: 'LIEU',
+          secondaryValue: 'CENTRO CULTURAL DE CASCAIS',
+          introParagraphs: [
+            'Présentée au Centro Cultural de Cascais sous le commissariat d’Helena Mendes Pereira (zet gallery), A Geography of Mysteries se déploie dans quatre espaces architecturaux distincts, chacun ancré par une série dédiée de sculptures et d’installations spatiales.',
+            'Travaillant principalement avec le bois de chêne et la pierre liés directement au territoire, Volker Schnüttgen aborde la sculpture comme un système de signes qui articule l’espace plutôt que de le remplir. Chaque salle instaure sa propre cadence de masse, d’intervalle et de silence.',
+          ],
+          largeHeading: 'Quatre espaces, une grammaire spatiale',
+          largeHeadingText:
+            'À travers les quatre salles de l’exposition, des œuvres en chêne sculpté et en pierre taillée puisent aux formes archaïques et à la géométrie durable des dolmens mégalithiques — invitant le visiteur à parcourir chaque série comme un territoire à découvrir.',
+          subHeading: 'Une matière liée au lieu',
+          subHeadingText:
+            'Minimalistes dans leur forme et profondément attentives au détail de surface, les pièces enregistrent le fil du bois brut, les fissures radiales et les traces de ciseau — transformant la matière physique en mémoire silencieuse.',
+        },
+        'dialogues-universonauta': {
+          date: 'EXERCICE CURATORIAL',
+          title: 'Dialogue(s) with a Universonauta — Volker Schnüttgen & Domingos Loureiro',
+          subtitle:
+            'Un exercice curatorial conçu par Helena Mendes Pereira réunissant des œuvres de Volker Schnüttgen et de Domingos Loureiro.',
+          creditLabel: 'COMMISSARIAT',
+          creditValue: 'HELENA MENDES PEREIRA',
+          secondaryLabel: 'ARTISTES',
+          secondaryValue: 'VOLKER SCHNÜTTGEN · DOMINGOS LOUREIRO',
+          introParagraphs: [
+            'Conçue comme un exercice curatorial par Helena Mendes Pereira, Dialogue(s) with a Universonauta met le vocabulaire sculptural de Volker Schnüttgen en conversation directe avec l’œuvre de Domingos Loureiro.',
+            'Plutôt que d’isoler chaque artiste, l’exposition explore des questions partagées de geste, de tension de surface et de la manière dont la présence matérielle construit un espace symbolique ouvert entre spectateur et œuvre.',
+          ],
+          largeHeading: 'Construire un dialogue partagé',
+          largeHeadingText:
+            'Placés côte à côte, les volumes ancrés de Schnüttgen en bois et en pierre entrent en contrepoint avec les recherches picturales et spatiales de Loureiro — révélant des résonances inattendues d’échelle, de rythme et de retenue.',
+          subHeading: 'La forme comme motif et signe',
+          subHeadingText:
+            'Nourrie par des décennies de dialogue entre sculpture, gravure et art média entre l’Allemagne et le Portugal, l’exposition affirme l’art comme une rencontre continue plutôt qu’un énoncé fermé.',
+        },
+        'monograph-1986-2021': {
+          date: '1986–2021',
+          title: 'Volker Schnüttgen: experiências técnico-poéticas de um escultor, obra (1986–2021)',
+          subtitle:
+            'Monographie complète accompagnée d’essais critiques de Gisela Rosenthal et de contributeurs, documentant trente-cinq ans de création sculpturale et spatiale.',
+          creditLabel: 'TEXTES DE',
+          creditValue: 'GISELA ROSENTHAL & AUTEURS',
+          secondaryLabel: 'PÉRIODE D’ARCHIVE',
+          secondaryValue: '1986 — 2021',
+          introParagraphs: [
+            'Volker Schnüttgen: experiências técnico-poéticas de um escultor, obra (1986–2021) rassemble trente-cinq ans de sculpture, d’installations publiques, de performances collaboratives et d’explorations en nouveaux médias au sein d’un même ouvrage critique.',
+            'S’ouvrant sur sa formation initiale en sculpture et gravure à l’Université des Arts de Brême (1982) et ses premières œuvres en pierre en Allemagne telles que Der Steinsetzer (1989), la monographie retrace son installation définitive à Sintra en 1993.',
+          ],
+          largeHeading: 'Entre Sintra, Porto et Berlin',
+          largeHeadingText:
+            'Aux côtés des monolithes extérieurs et des œuvres en bois documentées, la publication examine des jalons interdisciplinaires décisifs — notamment sa bourse de la Fondation Calouste Gulbenkian à Berlin (2004), son Master en Art Multimédia à la FBAUP (2008) et la coproduction berlinoise Habitat au Radialsystem V (2010).',
+          subHeading: 'Trente-cinq ans de pratique technico-poétique',
+          subHeadingText:
+            'Prolongeant l’archive jusqu’aux œuvres récentes telles qu’Abrigo I e II (2019), O Bosque (Trindade) (2019) et Livros (2021), les essais de Gisela Rosenthal et des coauteurs éclairent l’enquête durable de Schnüttgen sur la matière, la mémoire et le lieu.',
+        },
+      },
+    },
+    contact: {
+      eyebrow: 'NIVEAU B2 — CONTACT',
+      title: 'Contact & Atelier',
+      subtitle:
+        'Pour propositions d’exposition, commandes institutionnelles et demandes curatoriales.',
+      form: {
+        nameLabel: 'NOM *',
+        namePlaceholder: 'Votre nom complet',
+        emailLabel: 'E-MAIL *',
+        emailPlaceholder: 'nom@institution.org',
+        orgLabel: 'INSTITUTION',
+        orgPlaceholder: 'Galerie, musée ou institution',
+        locationLabel: 'LIEU',
+        locationPlaceholder: 'Ville, pays',
+        subjectLabel: 'OBJET DE LA DEMANDE',
+        subjectOptions: [
+          'Exposition / Commissariat',
+          'Commande publique / In situ',
+          'Galerie & Acquisition (zet gallery)',
+          'Publication / Presse',
+        ],
+        scopeLabel: 'CONTEXTE',
+        scopeOptions: [
+          'À préciser',
+          'Exposition à venir',
+          'Archive institutionnelle',
+          'Visite d’atelier',
+        ],
+        messageLabel: 'À PROPOS DE VOTRE DEMANDE *',
+        messagePlaceholder:
+          'Détails de l’exposition, contexte du lieu, calendrier ou notes curatoriales.',
+        submitBtn: 'ENVOYER LA DEMANDE',
+        confirmedTitle: 'Demande préparée',
+        confirmedBody: (name, subject) =>
+          `Merci, ${name}. Votre note concernant ${subject.toLowerCase()} est prête pour l’atelier de Sintra et la zet gallery.`,
+        newEnquiryBtn: 'NOUVELLE DEMANDE',
+      },
+      directContact: 'CONTACT DIRECT',
+      copiedLabel: 'COPIÉ',
+      studioLabel: 'ATELIER',
+      representationLabel: 'REPRÉSENTATION',
+      representationRole: 'Représentation en galerie',
+      privacy: 'CONFIDENTIALITÉ',
+      adminPortal: 'STUDIO ADMIN',
+      copyright: '© VOLKER SCHNÜTTGEN — SINTRA, PORTUGAL',
+    },
+    modals: {
+      close: 'FERMER',
+      archiveEyebrow: 'NIVEAU B1 — EXPOSITIONS & MONOGRAPHIE',
+      archiveTitle: 'Expositions & Publications',
+      archiveSubtitle: 'Projets curatoriaux et documentation monographique publiée.',
+      recordsCount: (n) => `${n} ENTRÉES`,
+      filterAll: 'TOUTES',
+      filterExhibition: 'EXPOSITION',
+      filterPublication: 'PUBLICATION',
+      enquiryDialogTitle: 'Demande d’atelier',
+      enquiryEyebrow: 'NIVEAU B2 — CONTACTER VOLKER SCHNÜTTGEN',
+      enquiryTitle: 'Envoyer une demande',
+      enquiryMeta:
+        'Contact direct atelier : mail@volker-schnuettgen.com · +351 962 370 193 · Représenté par zet gallery.',
+      enquiryPreparedTitle: 'Demande préparée',
+      enquiryPreparedBody: (name, subject) =>
+        `Merci, ${name}. Votre message concernant ${subject.toLowerCase()} a été préparé pour l’atelier de Sintra et la zet gallery.`,
+      nameLabel: 'NOM / INSTITUTION *',
+      namePlaceholder: 'Votre nom ou institution',
+      emailLabel: 'ADRESSE E-MAIL *',
+      emailPlaceholder: 'nom@institution.org',
+      subjectLabel: 'OBJET',
+      subjectOptions: [
+        'Exposition / Commissariat',
+        'Commande publique / In situ',
+        'Galerie & Acquisition (zet gallery)',
+        'Publication / Presse',
+      ],
+      messageLabel: 'MESSAGE *',
+      messagePlaceholder:
+        'Rédigez votre demande concernant une exposition, une œuvre ou une visite d’atelier.',
+      studioNote: 'ATELIER : [STUDIO] · SINTRA, PT',
+      sendBtn: 'ENVOYER LE MESSAGE',
+      privacyTitle: 'Mentions de confidentialité',
+      privacyEyebrow: 'NIVEAU B2 — MENTIONS LÉGALES',
+      privacyBody1:
+        'Ce portfolio présente les œuvres documentées, les expositions et la biographie de Volker Schnüttgen, sculpteur et artiste nouveaux médias établi à Sintra, Portugal.',
+      privacyBody2:
+        'Les coordonnées transmises via le formulaire sont utilisées uniquement pour répondre aux demandes curatoriales, institutionnelles ou de galerie.',
+      privacyMeta:
+        'CONTACT : MAIL@VOLKER-SCHNUETTGEN.COM · +351 962 370 193 · SINTRA, PORTUGAL',
+    },
+  },
 };
 
 const BASE_CATEGORIES_BY_ID = new Map(
@@ -1053,19 +1347,42 @@ export function getLocalizedCategory(
   language: Language,
 ): PortfolioCategoryItem {
   if (language === 'en') return category;
-  const localized = UI_TRANSLATIONS[language].portfolio.categories[category.id];
-  if (!localized) return category;
+
+  const dbLoc =
+    language === 'pt' || language === 'fr'
+      ? category.translations?.[language]
+      : undefined;
+  const staticLoc = UI_TRANSLATIONS[language].portfolio.categories[category.id];
   const base = BASE_CATEGORIES_BY_ID.get(category.id);
-  if (!base) return category;
+
+  const pickField = (
+    dbVal: string | undefined,
+    staticVal: string | undefined,
+    liveVal: string,
+    baseVal: string | undefined,
+  ): string => {
+    if (dbVal && dbVal.trim()) return dbVal.trim();
+    if (staticVal && baseVal !== undefined && liveVal === baseVal) {
+      return staticVal;
+    }
+    return liveVal;
+  };
+
   return {
     ...category,
-    title: category.title === base.title ? localized.title : category.title,
-    categoryLine:
-      category.categoryLine === base.categoryLine
-        ? localized.categoryLine
-        : category.categoryLine,
-    metaLine:
-      category.metaLine === base.metaLine ? localized.metaLine : category.metaLine,
+    title: pickField(dbLoc?.title, staticLoc?.title, category.title, base?.title),
+    categoryLine: pickField(
+      dbLoc?.categoryLine,
+      staticLoc?.categoryLine,
+      category.categoryLine,
+      base?.categoryLine,
+    ),
+    metaLine: pickField(
+      dbLoc?.metaLine,
+      staticLoc?.metaLine,
+      category.metaLine,
+      base?.metaLine,
+    ),
   };
 }
 
@@ -1073,7 +1390,15 @@ export function getCategoryFilterLabel(
   categoryId: string,
   language: Language,
   fallbackTitle?: string,
+  category?: PortfolioCategoryItem,
 ): string {
+  if (language !== 'en' && (language === 'pt' || language === 'fr')) {
+    const dbTitle = category?.translations?.[language]?.title;
+    if (dbTitle && dbTitle.trim()) {
+      return dbTitle.trim().toUpperCase();
+    }
+  }
+
   if (categoryId !== 'ALL' && fallbackTitle) {
     const base = BASE_CATEGORIES_BY_ID.get(categoryId);
     if (base && fallbackTitle !== base.title) {
@@ -1103,46 +1428,104 @@ export function getLocalizedJournalEntry(
   language: Language,
 ): JournalEntry {
   if (language === 'en') return entry;
-  const loc = UI_TRANSLATIONS[language].journal.entries[entry.id];
-  if (!loc) return entry;
+
+  const dbLoc =
+    language === 'pt' || language === 'fr'
+      ? entry.translations?.[language]
+      : undefined;
+  const staticLoc = UI_TRANSLATIONS[language].journal.entries[entry.id];
   const base = BASE_JOURNAL_BY_ID.get(entry.id);
-  if (!base) return entry;
+
+  if (!dbLoc && (!staticLoc || !base)) return entry;
+
+  const pickField = (
+    dbVal: string | undefined,
+    staticVal: string | undefined,
+    liveVal: string,
+    baseVal: string | undefined,
+  ): string => {
+    if (dbVal && dbVal.trim()) return dbVal.trim();
+    if (staticVal && baseVal !== undefined && liveVal === baseVal) {
+      return staticVal;
+    }
+    return liveVal;
+  };
 
   const sameIntro =
+    base !== undefined &&
     entry.introParagraphs.length === base.introParagraphs.length &&
     entry.introParagraphs.every((p, idx) => p === base.introParagraphs[idx]);
 
+  const localizedIntro =
+    dbLoc?.introParagraphs && dbLoc.introParagraphs.length > 0
+      ? dbLoc.introParagraphs
+      : sameIntro && staticLoc
+        ? staticLoc.introParagraphs
+        : entry.introParagraphs;
+
+  const localizedDetails =
+    dbLoc?.details && dbLoc.details.length > 0 ? dbLoc.details : entry.details;
+
   return {
     ...entry,
-    date: entry.date === base.date ? loc.date : entry.date,
-    title: entry.title === base.title ? loc.title : entry.title,
-    subtitle: entry.subtitle === base.subtitle ? loc.subtitle : entry.subtitle,
-    creditLabel:
-      entry.creditLabel === base.creditLabel ? loc.creditLabel : entry.creditLabel,
-    creditValue:
-      entry.creditValue === base.creditValue ? loc.creditValue : entry.creditValue,
-    secondaryLabel:
-      entry.secondaryLabel === base.secondaryLabel
-        ? loc.secondaryLabel
-        : entry.secondaryLabel,
-    secondaryValue:
-      entry.secondaryValue === base.secondaryValue
-        ? loc.secondaryValue
-        : entry.secondaryValue,
-    introParagraphs: sameIntro ? loc.introParagraphs : entry.introParagraphs,
-    largeHeading:
-      entry.largeHeading === base.largeHeading
-        ? loc.largeHeading
-        : entry.largeHeading,
-    largeHeadingText:
-      entry.largeHeadingText === base.largeHeadingText
-        ? loc.largeHeadingText
-        : entry.largeHeadingText,
-    subHeading:
-      entry.subHeading === base.subHeading ? loc.subHeading : entry.subHeading,
-    subHeadingText:
-      entry.subHeadingText === base.subHeadingText
-        ? loc.subHeadingText
-        : entry.subHeadingText,
+    date: pickField(dbLoc?.date, staticLoc?.date, entry.date, base?.date),
+    title: pickField(dbLoc?.title, staticLoc?.title, entry.title, base?.title),
+    subtitle: pickField(
+      dbLoc?.subtitle,
+      staticLoc?.subtitle,
+      entry.subtitle,
+      base?.subtitle,
+    ),
+    creditLabel: pickField(
+      dbLoc?.creditLabel,
+      staticLoc?.creditLabel,
+      entry.creditLabel,
+      base?.creditLabel,
+    ),
+    creditValue: pickField(
+      dbLoc?.creditValue,
+      staticLoc?.creditValue,
+      entry.creditValue,
+      base?.creditValue,
+    ),
+    secondaryLabel: pickField(
+      dbLoc?.secondaryLabel,
+      staticLoc?.secondaryLabel,
+      entry.secondaryLabel,
+      base?.secondaryLabel,
+    ),
+    secondaryValue: pickField(
+      dbLoc?.secondaryValue,
+      staticLoc?.secondaryValue,
+      entry.secondaryValue,
+      base?.secondaryValue,
+    ),
+    introParagraphs: localizedIntro,
+    largeHeading: pickField(
+      dbLoc?.largeHeading,
+      staticLoc?.largeHeading,
+      entry.largeHeading,
+      base?.largeHeading,
+    ),
+    largeHeadingText: pickField(
+      dbLoc?.largeHeadingText,
+      staticLoc?.largeHeadingText,
+      entry.largeHeadingText,
+      base?.largeHeadingText,
+    ),
+    subHeading: pickField(
+      dbLoc?.subHeading,
+      staticLoc?.subHeading,
+      entry.subHeading,
+      base?.subHeading,
+    ),
+    subHeadingText: pickField(
+      dbLoc?.subHeadingText,
+      staticLoc?.subHeadingText,
+      entry.subHeadingText,
+      base?.subHeadingText,
+    ),
+    details: localizedDetails,
   };
 }
+

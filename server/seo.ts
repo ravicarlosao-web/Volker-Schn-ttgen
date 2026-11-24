@@ -195,6 +195,7 @@ export function buildSitemapXml(
         ? [
             `    <xhtml:link rel="alternate" hreflang="en" href="${escapeXml(u.loc)}" />`,
             `    <xhtml:link rel="alternate" hreflang="pt" href="${escapeXml(u.loc)}${u.loc.includes('?') ? '&amp;' : '?'}lang=pt" />`,
+            `    <xhtml:link rel="alternate" hreflang="fr" href="${escapeXml(u.loc)}${u.loc.includes('?') ? '&amp;' : '?'}lang=fr" />`,
             `    <xhtml:link rel="alternate" hreflang="de" href="${escapeXml(u.loc)}${u.loc.includes('?') ? '&amp;' : '?'}lang=de" />`,
             `    <xhtml:link rel="alternate" hreflang="x-default" href="${escapeXml(u.loc)}" />`,
           ].join('\n')
@@ -396,33 +397,47 @@ export function injectHtmlSeoMeta(
 
   let routeSchema: Record<string, unknown> | null = null;
 
+  const reqLangRaw = typeof req.query.lang === 'string' ? req.query.lang : '';
+  const contentLocale =
+    reqLangRaw === 'pt' || reqLangRaw === 'fr' ? reqLangRaw : null;
+
   if (isAdmin) {
     title = 'Studio Console — Volker Schnüttgen';
     description = 'Private studio console.';
     robots = 'noindex, nofollow, noarchive';
     canonicalUrl = `${baseUrl}${adminPath}`;
   } else if (matchedWork) {
-    title = `${matchedWork.title} (${matchedWork.year}) — Volker Schnüttgen`;
+    const tWork = contentLocale ? matchedWork.translations?.[contentLocale] : undefined;
+    const workTitle = tWork?.title?.trim() || matchedWork.title;
+    const workMedium = tWork?.medium?.trim() || matchedWork.medium;
+    const workLead = tWork?.lead?.trim() || matchedWork.lead;
+    title = `${workTitle} (${matchedWork.year}) — Volker Schnüttgen`;
     description = truncateMeta(
-      `${matchedWork.medium} in ${matchedWork.location}. ${matchedWork.lead}`,
+      `${workMedium} · ${matchedWork.location}. ${workLead}`,
     );
     ogType = 'article';
     ogImage = resolveAbsoluteAssetUrl(baseUrl, matchedWork.image);
     canonicalUrl = `${baseUrl}/?work=${encodeURIComponent(matchedWork.id)}`;
     routeSchema = {
       '@type': 'VisualArtwork',
-      name: matchedWork.title,
+      name: workTitle,
       artform: matchedWork.typology,
-      artMedium: matchedWork.medium,
+      artMedium: workMedium,
       dateCreated: matchedWork.year,
-      description: matchedWork.lead,
+      description: workLead,
       image: ogImage,
       url: canonicalUrl,
       creator: { '@id': `${baseUrl}/#artist` },
     };
   } else if (matchedJournal) {
-    title = `${matchedJournal.title} — Volker Schnüttgen`;
-    description = truncateMeta(matchedJournal.subtitle);
+    const tJournal = contentLocale
+      ? matchedJournal.translations?.[contentLocale]
+      : undefined;
+    const journalTitle = tJournal?.title?.trim() || matchedJournal.title;
+    const journalSubtitle =
+      tJournal?.subtitle?.trim() || matchedJournal.subtitle;
+    title = `${journalTitle} — Volker Schnüttgen`;
+    description = truncateMeta(journalSubtitle);
     ogType = 'article';
     ogImage = resolveAbsoluteAssetUrl(baseUrl, matchedJournal.image);
     canonicalUrl = `${baseUrl}/?journal=${encodeURIComponent(matchedJournal.id)}`;
@@ -430,30 +445,36 @@ export function injectHtmlSeoMeta(
       matchedJournal.category === 'EXHIBITION'
         ? {
             '@type': 'ExhibitionEvent',
-            name: matchedJournal.title,
-            description: matchedJournal.subtitle,
+            name: journalTitle,
+            description: journalSubtitle,
             image: ogImage,
             url: canonicalUrl,
             performer: { '@id': `${baseUrl}/#artist` },
           }
         : {
             '@type': 'Article',
-            headline: matchedJournal.title,
-            description: matchedJournal.subtitle,
+            headline: journalTitle,
+            description: journalSubtitle,
             image: ogImage,
             url: canonicalUrl,
             about: { '@id': `${baseUrl}/#artist` },
           };
   } else if (matchedCategory) {
-    title = `${matchedCategory.title} Works — Volker Schnüttgen`;
+    const tCat = contentLocale
+      ? matchedCategory.translations?.[contentLocale]
+      : undefined;
+    const catTitle = tCat?.title?.trim() || matchedCategory.title;
+    const catLine = tCat?.categoryLine?.trim() || matchedCategory.categoryLine;
+    const catMeta = tCat?.metaLine?.trim() || matchedCategory.metaLine;
+    title = `${catTitle} Works — Volker Schnüttgen`;
     description = truncateMeta(
-      `${matchedCategory.categoryLine}. ${matchedCategory.metaLine} — Sculptural works by Volker Schnüttgen.`,
+      `${catLine}. ${catMeta} — Sculptural works by Volker Schnüttgen.`,
     );
     ogImage = resolveAbsoluteAssetUrl(baseUrl, matchedCategory.image);
     canonicalUrl = `${baseUrl}/?category=${encodeURIComponent(matchedCategory.id)}`;
     routeSchema = {
       '@type': 'CollectionPage',
-      name: `${matchedCategory.title} — Volker Schnüttgen`,
+      name: `${catTitle} — Volker Schnüttgen`,
       description,
       url: canonicalUrl,
     };
@@ -548,6 +569,7 @@ export function injectHtmlSeoMeta(
     `<meta property="og:url" content="${escapeHtmlAttr(canonicalUrl)}" />`,
     `<link rel="alternate" hreflang="en" href="${escapeHtmlAttr(`${baseUrl}/`)}" />`,
     `<link rel="alternate" hreflang="pt" href="${escapeHtmlAttr(`${baseUrl}/?lang=pt`)}" />`,
+    `<link rel="alternate" hreflang="fr" href="${escapeHtmlAttr(`${baseUrl}/?lang=fr`)}" />`,
     `<link rel="alternate" hreflang="de" href="${escapeHtmlAttr(`${baseUrl}/?lang=de`)}" />`,
     `<link rel="alternate" hreflang="x-default" href="${escapeHtmlAttr(`${baseUrl}/`)}" />`,
   ].join('\n    ');

@@ -5,7 +5,8 @@ import {
 } from '../data/formtectureData';
 import type { Language } from './LanguageContext';
 
-interface LocalizedProjectContent {
+export interface LocalizedProjectContent {
+  title?: string;
   categoryLine: string;
   medium: string;
   context: string;
@@ -13,7 +14,7 @@ interface LocalizedProjectContent {
   steps: [ProjectStep, ProjectStep, ProjectStep];
 }
 
-const PT_PROJECTS: Record<string, LocalizedProjectContent> = {
+export const PT_PROJECTS: Record<string, LocalizedProjectContent> = {
   livros: {
     categoryLine: 'ESCULTURA · MATERIALIDADE TERRITORIAL',
     medium: 'MADEIRA DE CARVALHO · ESCULTURA',
@@ -699,6 +700,349 @@ const DE_PROJECTS: Record<string, LocalizedProjectContent> = {
   },
 };
 
+export const FR_PROJECTS: Record<string, LocalizedProjectContent> = {
+  livros: {
+    categoryLine: 'SCULPTURE · MATÉRIALITÉ TERRITORIALE',
+    medium: 'BOIS DE CHÊNE · SCULPTURE',
+    context: 'ZET GALLERY / 1986–2021',
+    lead: 'Volumes sculpturaux minimalistes en forme de livres. Le bois brut et l’incision mesurée traitent la matière comme un témoignage durable du lieu et du temps.',
+    steps: [
+      {
+        label: 'Matière',
+        text: 'Taillée dans des blocs de bois massif liés au territoire, en préservant le fil naturel, les fissures et le poids de surface.',
+      },
+      {
+        label: 'Forme',
+        text: 'Réduite à des géométries de livres ouverts et fermés où des coupes minimales instaurent un rythme sans geste ornemental.',
+      },
+      {
+        label: 'Contexte',
+        text: 'Créée en 2021 et documentée dans la monographie rétrospective consacrée à l’œuvre de Volker Schnüttgen entre 1986 et 2021.',
+      },
+    ],
+  },
+  'o-bosque-trindade': {
+    categoryLine: 'SCULPTURE & INSTALLATION SPATIALE',
+    medium: 'BOIS DE CHÊNE · INSTALLATION',
+    context: 'EXPOSITION SPATIALE · 2019',
+    lead: 'Un champ de monolithes verticaux en chêne répartis dans la salle. L’installation marque l’espace comme une forêt de signes à découvrir.',
+    steps: [
+      {
+        label: 'Matière',
+        text: 'Éléments verticaux en chêne travaillés avec des traces d’outils retenues afin que la densité du bois brut reste lisible à l’échelle du corps.',
+      },
+      {
+        label: 'Forme',
+        text: 'Espacés comme des troncs dressés ou des bornes mégalithiques, établissant un motif qui transforme le sol en territoire symbolique.',
+      },
+      {
+        label: 'Contexte',
+        text: 'Réalisée en 2019 dans le cadre des recherches spatiales de Schnüttgen entre imaginaire forestier ancestral et architecture de galerie.',
+      },
+    ],
+  },
+  'abrigo-i-e-ii': {
+    categoryLine: 'SCULPTURE · FORME ARCHITECTONIQUE',
+    medium: 'PIERRE & CHÊNE · SCULPTURE',
+    context: 'ŒUVRES APPARIÉES · 2019',
+    lead: 'Deux sculptures en dialogue sur l’abri et le seuil. Pierre massive et bois se rencontrent dans des formes évoquant les dolmens archaïques.',
+    steps: [
+      {
+        label: 'Matière',
+        text: 'Associe une masse de pierre brute et des poutres de bois massif ancrées uniquement par la gravité, l’appui et l’équilibre.',
+      },
+      {
+        label: 'Forme',
+        text: 'S’appuie directement sur la clarté sémiotique des dolmens mégalithiques — créant une ombre intérieure et un refuge spatial silencieux.',
+      },
+      {
+        label: 'Contexte',
+        text: 'Achevée en 2019 comme deux structures complémentaires prolongeant la réflexion de l’artiste sur l’habiter, la protection et le lieu.',
+      },
+    ],
+  },
+  'trilogia-de-um-carvalho': {
+    categoryLine: 'SCULPTURE · BOIS DE CHÊNE',
+    medium: 'TRONCS DE CHÊNE SCULPTÉS',
+    context: 'ATELIER DE SINTRA · 2011',
+    lead: 'Trois formes monumentales taillées dans des troncs de chêne. Chaque volume enregistre croissance, poids et intervention géométrique délibérée.',
+    steps: [
+      {
+        label: 'Matière',
+        text: 'Chêne massif issu du territoire local, respectant nœuds, fentes radiales et patine naturelle de surface.',
+      },
+      {
+        label: 'Forme',
+        text: 'Disposée en une séquence tripartite où des coupes subtiles et des facettes planes ouvrent un dialogue à travers le sol.',
+      },
+      {
+        label: 'Contexte',
+        text: 'Produite en 2011 à Sintra, marquant une œuvre clé dans la longue étude de Volker Schnüttgen sur le chêne comme médium sculptural.',
+      },
+    ],
+  },
+  habitat: {
+    categoryLine: 'INSTALLATION · SCULPTURES EN CHÊNE, DANSE & SON',
+    medium: 'SCULPTURE EN CHÊNE · MÉDIAS INTERACTIFS',
+    context: 'LABORGRAS · RADIALSYSTEM V',
+    lead: 'Une installation praticable en chêne unissant sculpture, chorégraphie et son en direct. Coproduite avec le collectif de danse LaborGras.',
+    steps: [
+      {
+        label: 'Matière',
+        text: 'Architecture sculpturale en chêne associée aux systèmes média interactifs de Frieder Weiss et au paysage sonore de Giorgio de Santis.',
+      },
+      {
+        label: 'Forme',
+        text: 'Fonctionne simultanément comme sculpture, scène de performance et habitat spatial partagé traversé par les danseurs et le public.',
+      },
+      {
+        label: 'Contexte',
+        text: 'Créée au Radialsystem V à Berlin en 2010 avec le soutien du Capital Berlin Cultural Fund.',
+      },
+    ],
+  },
+  'espacos-virtuais': {
+    categoryLine: 'SÉRIE · ART MÉDIA & ÉTUDE SPATIALE',
+    medium: 'NOUVEAUX MÉDIAS · SÉRIE SPATIALE',
+    context: 'FBAUP ART MÉDIA · 2008',
+    lead: 'Une série en huit volets reliant la perception sculpturale physique et les environnements spatiaux virtuels.',
+    steps: [
+      {
+        label: 'Matière',
+        text: 'Études spatiales numériques nourries par la formation de l’artiste aux nouvelles technologies à Berlin en 2004, grâce à une bourse Gulbenkian.',
+      },
+      {
+        label: 'Forme',
+        text: 'Articulée en huit études séquentielles examinant la limite, la lumière et la profondeur virtuelle.',
+      },
+      {
+        label: 'Contexte',
+        text: 'Développée en 2008 parallèlement à son Master en Art Multimédia à la FBAUP de Porto.',
+      },
+    ],
+  },
+  pieta: {
+    categoryLine: 'SCULPTURE · FIGURATION ARCHAÏQUE',
+    medium: 'SCULPTURE',
+    context: 'ŒUVRE UNIQUE · 2007',
+    lead: 'Figuration archaïque condensée en une masse sculpturale silencieuse. Le geste ancien traduit dans une forme contemporaine minimaliste.',
+    steps: [
+      {
+        label: 'Matière',
+        text: 'Taillée dans une masse sculpturale solide avec une grande rigueur sur les transitions de surface et la tension des arêtes.',
+      },
+      {
+        label: 'Forme',
+        text: 'Trace un chemin allant de la mémoire figurative archaïque vers une abstraction géométrique épurée.',
+      },
+      {
+        label: 'Contexte',
+        text: 'Créée en 2007 durant la période d’atelier de Volker Schnüttgen à Sintra.',
+      },
+    ],
+  },
+  'quadrado-negro': {
+    categoryLine: 'SCULPTURE · RÉDUCTION GÉOMÉTRIQUE',
+    medium: 'SCULPTURE',
+    context: 'ŒUVRE UNIQUE · 2007',
+    lead: 'Un signe géométrique austère ancré dans l’espace. Volume minimaliste réduit au pur poids et au contour.',
+    steps: [
+      {
+        label: 'Matière',
+        text: 'Surface assombrie et corps sculptural dense privilégiant la masse au détriment du détail descriptif.',
+      },
+      {
+        label: 'Forme',
+        text: 'Opère comme repère visuel et point d’ancrage spatial au sein de la salle d’exposition.',
+      },
+      {
+        label: 'Contexte',
+        text: 'Achevée en 2007 dans le cadre des recherches géométriques réductives de Schnüttgen.',
+      },
+    ],
+  },
+  'alfabeto-escultorico': {
+    categoryLine: 'SÉRIE · SCULPTURE SÉMIOTIQUE',
+    medium: 'SÉRIE DE SCULPTURES',
+    context: 'SÉRIE SÉMIOTIQUE · 2006',
+    lead: 'Sculpture articulée comme une grammaire de signes. Des formes individuelles s’assemblent tels les caractères d’une écriture ancestrale.',
+    steps: [
+      {
+        label: 'Matière',
+        text: 'Série d’études tactiles réalisées dans des matériaux sculpturaux naturels et structurels.',
+      },
+      {
+        label: 'Forme',
+        text: 'Chaque pièce agit comme une unité typographique distincte au sein d’un vocabulaire spatial à découvrir.',
+      },
+      {
+        label: 'Contexte',
+        text: 'Produite en 2006, incarnant sa vision de la sculpture comme motif établissant un signe.',
+      },
+    ],
+  },
+  'para-florbela-espanca': {
+    categoryLine: 'SCULPTURE · ŒUVRE D’HOMMAGE',
+    medium: 'SCULPTURE',
+    context: 'PORTUGAL · 1998',
+    lead: 'Un hommage sculptural dédié à la poétesse portugaise Florbela Espanca. Retenue poétique contenue dans une forme matérielle silencieuse.',
+    steps: [
+      {
+        label: 'Matière',
+        text: 'Façonnée avec une discipline manuelle attentive issue des traditions de la pierre et du bois.',
+      },
+      {
+        label: 'Forme',
+        text: 'Silhouette minimaliste créant un espace contemplatif de mémoire et de recueillement.',
+      },
+      {
+        label: 'Contexte',
+        text: 'Réalisée en 1998 durant les premières années d’installation permanente de l’artiste à Sintra.',
+      },
+    ],
+  },
+  satzzeichen: {
+    categoryLine: 'SÉRIE · ŒUVRE SCULPTURALE EN CINQ PARTIES',
+    medium: 'SÉRIE SCULPTURALE EN CINQ PARTIES',
+    context: 'SÉRIE · 1997',
+    lead: 'Cinq signes de ponctuation sculpturaux placés en dialogue avec l’architecture. Chaque pièce introduit pause et cadence.',
+    steps: [
+      {
+        label: 'Matière',
+        text: 'Cinq éléments physiques façonnés avec des arêtes nettes et un contraste tactile de surface.',
+      },
+      {
+        label: 'Forme',
+        text: 'Agit littéralement comme une ponctuation spatiale — divisant, ralentissant et cadrant le mouvement dans la salle.',
+      },
+      {
+        label: 'Contexte',
+        text: 'Achevée en 1997 entre rigueur structurelle allemande et pratique d’atelier au Portugal.',
+      },
+    ],
+  },
+  'jogo-fatal': {
+    categoryLine: 'SCULPTURE · ŒUVRE EN DEUX PARTIES',
+    medium: 'SCULPTURE',
+    context: 'CYCLE EN DEUX PARTIES · 1995–1997',
+    lead: 'Un cycle sculptural en deux volets développé entre 1995 et 1997. Des volumes opposés maintiennent la tension physique en équilibre.',
+    steps: [
+      {
+        label: 'Matière',
+        text: 'Matériaux denses façonnés pour révéler la contrainte structurelle et le contrepoids.',
+      },
+      {
+        label: 'Forme',
+        text: 'Deux propositions appariées éprouvant l’équilibre, la fracture et la confrontation spatiale.',
+      },
+      {
+        label: 'Contexte',
+        text: 'Produite entre 1995 et 1997 après son installation permanente au Portugal.',
+      },
+    ],
+  },
+  'memoria-de-lisboa': {
+    categoryLine: 'SCULPTURE · MÉMOIRE TERRITORIALE',
+    medium: 'SCULPTURE',
+    context: 'PORTUGAL · 1995',
+    lead: 'Une première réponse sculpturale à la lumière, à la pierre et à l’horizon urbain de Lisbonne, créée deux ans après son arrivée à Sintra.',
+    steps: [
+      {
+        label: 'Matière',
+        text: 'Ancrée dans la pierre brute et la permanence minérale reflétant le calcaire et le granit de Lisbonne.',
+      },
+      {
+        label: 'Forme',
+        text: 'Mémoire architecturale compacte comprimée en plans sculpturaux minimaux.',
+      },
+      {
+        label: 'Contexte',
+        text: 'Créée en 1995 après son arrivée au Portugal grâce à une bourse du ministère portugais des Affaires étrangères.',
+      },
+    ],
+  },
+  'der-steinsetzer': {
+    categoryLine: 'SCULPTURE · TRAVAIL DE LA PIERRE',
+    medium: 'SCULPTURE EN PIERRE',
+    context: 'ŒUVRE DE JEUNESSE · 1989',
+    lead: 'Une première œuvre en pierre réalisée en Allemagne. Poids ancré et pierre taillée à la main posent les bases de son langage ultérieur.',
+    steps: [
+      {
+        label: 'Matière',
+        text: 'Pierre taillée directement au ciseau, au maillet et posée à la main.',
+      },
+      {
+        label: 'Forme',
+        text: 'Ancre le geste du poseur de pierre — marquant le sol, la gravité et la mesure humaine.',
+      },
+      {
+        label: 'Contexte',
+        text: 'Exécutée en 1989 après ses études de sculpture et de gravure à l’Université des Arts de Brême.',
+      },
+    ],
+  },
+  'monumento-arvore-desconhecida': {
+    categoryLine: 'SCULPTURE · REPÈRE TERRITORIAL',
+    medium: 'BOIS & PIERRE · SCULPTURE',
+    context: 'ŒUVRE TERRITORIALE',
+    lead: 'Un monument silencieux dédié à un arbre inconnu. La sculpture devient un repère éthique honorant la présence naturelle dans le paysage.',
+    steps: [
+      {
+        label: 'Matière',
+        text: 'Bois organique et pierre territoriale réunis sans artifice.',
+      },
+      {
+        label: 'Forme',
+        text: 'Repère vertical minimaliste créant un lieu intime de pause et de reconnaissance.',
+      },
+      {
+        label: 'Contexte',
+        text: 'Reflète le dialogue récurrent de Volker Schnüttgen avec la mémoire arboricole et la conscience écologique.',
+      },
+    ],
+  },
+  'rosa-dos-ventos': {
+    categoryLine: 'SCULPTURE IN SITU · RÉSIDENCE ARTISTIQUE',
+    medium: 'SCULPTURE SITE-SPECIFIC',
+    context: 'ALDEIA DO PONTIDO, FAFE',
+    lead: 'Sculpture in situ créée lors d’une résidence artistique à Aldeia do Pontido, Fafe, orientant les points cardinaux sur le terrain.',
+    steps: [
+      {
+        label: 'Matière',
+        text: 'Construite avec des matériaux naturels durables adaptés à la topographie rurale exposée du nord du Portugal.',
+      },
+      {
+        label: 'Forme',
+        text: 'Traduit l’orientation cardinale en un signe sculptural accessible et à découvrir.',
+      },
+      {
+        label: 'Contexte',
+        text: 'Issue directement de la résidence de l’artiste à Aldeia do Pontido, Fafe.',
+      },
+    ],
+  },
+  'common-home': {
+    categoryLine: 'ŒUVRE PUBLIQUE · UNIVERSIDADE DO MINHO',
+    medium: 'SCULPTURE PUBLIQUE',
+    context: 'CAMPUS DE AZURÉM, GUIMARÃES',
+    lead: 'Œuvre publique permanente sur le campus d’Azurém de l’Universidade do Minho. Un abri archétypal marquant un sol civique partagé.',
+    steps: [
+      {
+        label: 'Matière',
+        text: 'Pierre naturelle monumentale et bois de structure proportionnés pour une implantation extérieure durable sur le campus.',
+      },
+      {
+        label: 'Forme',
+        text: 'Évoque un seuil ouvert et une maison ancestrale — un lieu de rencontre symbolique ouvert à tous.',
+      },
+      {
+        label: 'Contexte',
+        text: 'Installée à l’Universidade do Minho, Campus d’Azurém, Guimarães.',
+      },
+    ],
+  },
+};
+
 const BASE_PROJECTS_BY_ID = new Map(PROJECTS.map((p) => [p.id, p]));
 
 export function getLocalizedProject(
@@ -706,36 +1050,74 @@ export function getLocalizedProject(
   language: Language,
 ): ProjectItem {
   if (language === 'en') return project;
-  const map = language === 'pt' ? PT_PROJECTS : DE_PROJECTS;
-  const loc = map[project.id];
-  if (!loc) return project;
-  const base = BASE_PROJECTS_BY_ID.get(project.id);
-  if (!base) return project;
 
-  const localizedSteps: [ProjectStep, ProjectStep, ProjectStep] = [
-    project.steps[0].label === base.steps[0].label &&
-    project.steps[0].text === base.steps[0].text
-      ? loc.steps[0]
-      : project.steps[0],
-    project.steps[1].label === base.steps[1].label &&
-    project.steps[1].text === base.steps[1].text
-      ? loc.steps[1]
-      : project.steps[1],
-    project.steps[2].label === base.steps[2].label &&
-    project.steps[2].text === base.steps[2].text
-      ? loc.steps[2]
-      : project.steps[2],
-  ];
+  const dbLoc =
+    language === 'pt' || language === 'fr'
+      ? project.translations?.[language]
+      : undefined;
+
+  const staticMap =
+    language === 'pt'
+      ? PT_PROJECTS
+      : language === 'fr'
+        ? FR_PROJECTS
+        : DE_PROJECTS;
+  const staticLoc = staticMap[project.id];
+  const base = BASE_PROJECTS_BY_ID.get(project.id);
+
+  if (!dbLoc && (!staticLoc || !base)) {
+    return project;
+  }
+
+  const pickField = (
+    dbValue: string | undefined,
+    staticValue: string | undefined,
+    liveValue: string,
+    baseValue: string | undefined,
+  ): string => {
+    if (dbValue && dbValue.trim()) return dbValue.trim();
+    if (staticValue && baseValue !== undefined && liveValue === baseValue) {
+      return staticValue;
+    }
+    return liveValue;
+  };
+
+  const localizedSteps: [ProjectStep, ProjectStep, ProjectStep] = ([0, 1, 2] as const).map(
+    (idx) => {
+      const dbStep = dbLoc?.steps?.[idx];
+      if (dbStep && dbStep.text && dbStep.text.trim()) {
+        return {
+          label: dbStep.label?.trim() || project.steps[idx].label,
+          text: dbStep.text,
+        };
+      }
+      const staticStep = staticLoc?.steps?.[idx];
+      const baseStep = base?.steps?.[idx];
+      if (
+        staticStep &&
+        baseStep &&
+        project.steps[idx].label === baseStep.label &&
+        project.steps[idx].text === baseStep.text
+      ) {
+        return staticStep;
+      }
+      return project.steps[idx];
+    },
+  ) as [ProjectStep, ProjectStep, ProjectStep];
 
   return {
     ...project,
-    categoryLine:
-      project.categoryLine === base.categoryLine
-        ? loc.categoryLine
-        : project.categoryLine,
-    medium: project.medium === base.medium ? loc.medium : project.medium,
-    context: project.context === base.context ? loc.context : project.context,
-    lead: project.lead === base.lead ? loc.lead : project.lead,
+    title: pickField(dbLoc?.title, staticLoc?.title, project.title, base?.title),
+    categoryLine: pickField(
+      dbLoc?.categoryLine,
+      staticLoc?.categoryLine,
+      project.categoryLine,
+      base?.categoryLine,
+    ),
+    medium: pickField(dbLoc?.medium, staticLoc?.medium, project.medium, base?.medium),
+    context: pickField(dbLoc?.context, staticLoc?.context, project.context, base?.context),
+    lead: pickField(dbLoc?.lead, staticLoc?.lead, project.lead, base?.lead),
     steps: localizedSteps,
   };
 }
+

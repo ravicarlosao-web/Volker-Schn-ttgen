@@ -115,3 +115,208 @@ export const ALLOWED_ENQUIRY_STATUSES = [
   'READ',
   'ARCHIVED',
 ] as const;
+
+type ContentLocale = 'pt' | 'fr';
+const CONTENT_LOCALES: ContentLocale[] = ['pt', 'fr'];
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function sanitizeCategoryTranslations(raw: unknown) {
+  if (!isPlainRecord(raw)) return undefined;
+  const out: Partial<
+    Record<ContentLocale, { title?: string; categoryLine?: string; metaLine?: string }>
+  > = {};
+
+  for (const locale of CONTENT_LOCALES) {
+    const entry = raw[locale];
+    if (!isPlainRecord(entry)) continue;
+    const title = cleanString(entry.title, 80);
+    const categoryLine = cleanString(entry.categoryLine, 160);
+    const metaLine = cleanString(entry.metaLine, 160);
+    const locObj: { title?: string; categoryLine?: string; metaLine?: string } = {};
+    if (title) locObj.title = title;
+    if (categoryLine) locObj.categoryLine = categoryLine;
+    if (metaLine) locObj.metaLine = metaLine;
+    if (Object.keys(locObj).length > 0) {
+      out[locale] = locObj;
+    }
+  }
+
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+export function sanitizeProjectTranslations(
+  raw: unknown,
+  fallbackLabels: [string, string, string] = ['Material', 'Form', 'Context'],
+) {
+  if (!isPlainRecord(raw)) return undefined;
+  const out: Partial<
+    Record<
+      ContentLocale,
+      {
+        title?: string;
+        categoryLine?: string;
+        medium?: string;
+        context?: string;
+        lead?: string;
+        steps?: [
+          { label: string; text: string },
+          { label: string; text: string },
+          { label: string; text: string },
+        ];
+      }
+    >
+  > = {};
+
+  for (const locale of CONTENT_LOCALES) {
+    const entry = raw[locale];
+    if (!isPlainRecord(entry)) continue;
+
+    const title = cleanString(entry.title, 160);
+    const categoryLine = cleanString(entry.categoryLine, 160);
+    const medium = cleanString(entry.medium, 160);
+    const context = cleanString(entry.context, 160);
+    const lead = cleanString(entry.lead, 600, true);
+
+    const locObj: {
+      title?: string;
+      categoryLine?: string;
+      medium?: string;
+      context?: string;
+      lead?: string;
+      steps?: [
+        { label: string; text: string },
+        { label: string; text: string },
+        { label: string; text: string },
+      ];
+    } = {};
+
+    if (title) locObj.title = title;
+    if (categoryLine) locObj.categoryLine = categoryLine;
+    if (medium) locObj.medium = medium;
+    if (context) locObj.context = context;
+    if (lead) locObj.lead = lead;
+
+    if (Array.isArray(entry.steps)) {
+      const parsedSteps: [
+        { label: string; text: string },
+        { label: string; text: string },
+        { label: string; text: string },
+      ] = [
+        {
+          label: cleanString(entry.steps[0]?.label, 60) || fallbackLabels[0],
+          text: cleanString(entry.steps[0]?.text, 600, true),
+        },
+        {
+          label: cleanString(entry.steps[1]?.label, 60) || fallbackLabels[1],
+          text: cleanString(entry.steps[1]?.text, 600, true),
+        },
+        {
+          label: cleanString(entry.steps[2]?.label, 60) || fallbackLabels[2],
+          text: cleanString(entry.steps[2]?.text, 600, true),
+        },
+      ];
+      if (parsedSteps.some((s) => Boolean(s.text))) {
+        locObj.steps = parsedSteps;
+      }
+    }
+
+    if (Object.keys(locObj).length > 0) {
+      out[locale] = locObj;
+    }
+  }
+
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+export function sanitizeJournalTranslations(raw: unknown) {
+  if (!isPlainRecord(raw)) return undefined;
+  const out: Partial<
+    Record<
+      ContentLocale,
+      {
+        date?: string;
+        title?: string;
+        subtitle?: string;
+        creditLabel?: string;
+        creditValue?: string;
+        secondaryLabel?: string;
+        secondaryValue?: string;
+        introParagraphs?: string[];
+        largeHeading?: string;
+        largeHeadingText?: string;
+        subHeading?: string;
+        subHeadingText?: string;
+        details?: string[];
+      }
+    >
+  > = {};
+
+  for (const locale of CONTENT_LOCALES) {
+    const entry = raw[locale];
+    if (!isPlainRecord(entry)) continue;
+
+    const locObj: {
+      date?: string;
+      title?: string;
+      subtitle?: string;
+      creditLabel?: string;
+      creditValue?: string;
+      secondaryLabel?: string;
+      secondaryValue?: string;
+      introParagraphs?: string[];
+      largeHeading?: string;
+      largeHeadingText?: string;
+      subHeading?: string;
+      subHeadingText?: string;
+      details?: string[];
+    } = {};
+
+    const date = cleanString(entry.date, 120);
+    const title = cleanString(entry.title, 200);
+    const subtitle = cleanString(entry.subtitle, 500, true);
+    const creditLabel = cleanString(entry.creditLabel, 80);
+    const creditValue = cleanString(entry.creditValue, 160);
+    const secondaryLabel = cleanString(entry.secondaryLabel, 80);
+    const secondaryValue = cleanString(entry.secondaryValue, 160);
+    const largeHeading = cleanString(entry.largeHeading, 180);
+    const largeHeadingText = cleanString(entry.largeHeadingText, 2500, true);
+    const subHeading = cleanString(entry.subHeading, 180);
+    const subHeadingText = cleanString(entry.subHeadingText, 2500, true);
+
+    if (date) locObj.date = date;
+    if (title) locObj.title = title;
+    if (subtitle) locObj.subtitle = subtitle;
+    if (creditLabel) locObj.creditLabel = creditLabel;
+    if (creditValue) locObj.creditValue = creditValue;
+    if (secondaryLabel) locObj.secondaryLabel = secondaryLabel;
+    if (secondaryValue) locObj.secondaryValue = secondaryValue;
+    if (largeHeading) locObj.largeHeading = largeHeading;
+    if (largeHeadingText) locObj.largeHeadingText = largeHeadingText;
+    if (subHeading) locObj.subHeading = subHeading;
+    if (subHeadingText) locObj.subHeadingText = subHeadingText;
+
+    if (Array.isArray(entry.introParagraphs)) {
+      const paragraphs = entry.introParagraphs
+        .map((p) => cleanString(p, 2000, true))
+        .filter(Boolean);
+      if (paragraphs.length > 0) locObj.introParagraphs = paragraphs;
+    }
+
+    if (Array.isArray(entry.details)) {
+      const details = entry.details
+        .map((d) => cleanString(d, 1000, true))
+        .filter(Boolean);
+      if (details.length > 0) locObj.details = details;
+    }
+
+    if (Object.keys(locObj).length > 0) {
+      out[locale] = locObj;
+    }
+  }
+
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+

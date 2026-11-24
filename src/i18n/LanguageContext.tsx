@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 
-export type Language = 'en' | 'pt' | 'de';
+export type Language = 'en' | 'pt' | 'fr' | 'de';
 
 interface LanguageContextValue {
   language: Language;
@@ -17,7 +17,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguage] = useState<Language>(() => {
     if (typeof window === 'undefined') return 'en';
     const param = new URLSearchParams(window.location.search).get('lang');
-    if (param === 'pt' || param === 'de' || param === 'en') {
+    if (param === 'pt' || param === 'fr' || param === 'de' || param === 'en') {
       return param;
     }
     return 'en';

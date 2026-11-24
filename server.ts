@@ -66,6 +66,9 @@ import {
   isValidEmail,
   normalizeAdminPath,
   normalizeCategoryId,
+  sanitizeCategoryTranslations,
+  sanitizeJournalTranslations,
+  sanitizeProjectTranslations,
   slugifyLower,
 } from './server/validators.ts';
 
@@ -651,6 +654,7 @@ app.post('/api/admin/categories', requireAdmin, async (req, res) => {
     const categoryLine = cleanString(req.body?.categoryLine, 160);
     const metaLine = cleanString(req.body?.metaLine, 160);
     const image = cleanString(req.body?.image, 1200);
+    const translations = sanitizeCategoryTranslations(req.body?.translations);
 
     if (!id || !title || !categoryLine || !isSafeAssetUrl(image)) {
       res.status(400).json({
@@ -666,7 +670,15 @@ app.post('/api/admin/categories', requireAdmin, async (req, res) => {
       return;
     }
 
-    const item = { id, code, title, categoryLine, metaLine, image };
+    const item = {
+      id,
+      code,
+      title,
+      categoryLine,
+      metaLine,
+      image,
+      ...(translations ? { translations } : {}),
+    };
     await saveCategory(item);
     res.status(201).json(item);
   } catch (err) {
@@ -699,6 +711,7 @@ async function handleUpdateCategory(req: Request, res: Response) {
     const categoryLine = cleanString(req.body?.categoryLine, 160);
     const metaLine = cleanString(req.body?.metaLine, 160);
     const image = cleanString(req.body?.image, 1200);
+    const translations = sanitizeCategoryTranslations(req.body?.translations);
 
     if (!id || !title || !code || !categoryLine || !isSafeAssetUrl(image)) {
       res.status(400).json({ error: 'Invalid category payload.' });
@@ -710,7 +723,15 @@ async function handleUpdateCategory(req: Request, res: Response) {
       return;
     }
 
-    const item = { id, code, title, categoryLine, metaLine, image };
+    const item = {
+      id,
+      code,
+      title,
+      categoryLine,
+      metaLine,
+      image,
+      ...(translations ? { translations } : {}),
+    };
     await saveCategory(item);
     res.json(item);
   } catch (err) {
@@ -819,6 +840,12 @@ app.post('/api/admin/projects', requireAdmin, async (req, res) => {
       },
     ];
 
+    const translations = sanitizeProjectTranslations(req.body?.translations, [
+      steps[0].label,
+      steps[1].label,
+      steps[2].label,
+    ]);
+
     const item = {
       id,
       floor,
@@ -835,6 +862,7 @@ app.post('/api/admin/projects', requireAdmin, async (req, res) => {
       gallery,
       steps,
       featured: Boolean(req.body?.featured),
+      ...(translations ? { translations } : {}),
     };
 
     await saveProject(item);
@@ -904,6 +932,12 @@ app.put('/api/admin/projects/:id', requireAdmin, async (req, res) => {
       },
     ];
 
+    const translations = sanitizeProjectTranslations(req.body?.translations, [
+      steps[0].label,
+      steps[1].label,
+      steps[2].label,
+    ]);
+
     const item = {
       id,
       floor: floor || '01',
@@ -920,6 +954,7 @@ app.put('/api/admin/projects/:id', requireAdmin, async (req, res) => {
       gallery,
       steps,
       featured: Boolean(req.body?.featured),
+      ...(translations ? { translations } : {}),
     };
 
     await saveProject(item);
@@ -994,6 +1029,8 @@ app.post('/api/admin/journal', requireAdmin, async (req, res) => {
 
     const id = await resolveUniqueId(rawSlug, journalEntryExists);
 
+    const translations = sanitizeJournalTranslations(req.body?.translations);
+
     const item = {
       id,
       date,
@@ -1012,6 +1049,7 @@ app.post('/api/admin/journal', requireAdmin, async (req, res) => {
       subHeadingText,
       details: details.length > 0 ? details : [subtitle],
       featured: req.body?.featured !== undefined ? Boolean(req.body.featured) : true,
+      ...(translations ? { translations } : {}),
     };
 
     await saveJournalEntry(item);
@@ -1067,6 +1105,8 @@ app.put('/api/admin/journal/:id', requireAdmin, async (req, res) => {
       return;
     }
 
+    const translations = sanitizeJournalTranslations(req.body?.translations);
+
     const item = {
       id,
       date,
@@ -1085,6 +1125,7 @@ app.put('/api/admin/journal/:id', requireAdmin, async (req, res) => {
       subHeadingText,
       details: details.length > 0 ? details : [subtitle],
       featured: req.body?.featured !== undefined ? Boolean(req.body.featured) : true,
+      ...(translations ? { translations } : {}),
     };
 
     await saveJournalEntry(item);
