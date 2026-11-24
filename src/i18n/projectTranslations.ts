@@ -1,4 +1,8 @@
-import type { ProjectItem, ProjectStep } from '../data/formtectureData';
+import {
+  PROJECTS,
+  type ProjectItem,
+  type ProjectStep,
+} from '../data/formtectureData';
 import type { Language } from './LanguageContext';
 
 interface LocalizedProjectContent {
@@ -695,6 +699,8 @@ const DE_PROJECTS: Record<string, LocalizedProjectContent> = {
   },
 };
 
+const BASE_PROJECTS_BY_ID = new Map(PROJECTS.map((p) => [p.id, p]));
+
 export function getLocalizedProject(
   project: ProjectItem,
   language: Language,
@@ -703,12 +709,33 @@ export function getLocalizedProject(
   const map = language === 'pt' ? PT_PROJECTS : DE_PROJECTS;
   const loc = map[project.id];
   if (!loc) return project;
+  const base = BASE_PROJECTS_BY_ID.get(project.id);
+  if (!base) return project;
+
+  const localizedSteps: [ProjectStep, ProjectStep, ProjectStep] = [
+    project.steps[0].label === base.steps[0].label &&
+    project.steps[0].text === base.steps[0].text
+      ? loc.steps[0]
+      : project.steps[0],
+    project.steps[1].label === base.steps[1].label &&
+    project.steps[1].text === base.steps[1].text
+      ? loc.steps[1]
+      : project.steps[1],
+    project.steps[2].label === base.steps[2].label &&
+    project.steps[2].text === base.steps[2].text
+      ? loc.steps[2]
+      : project.steps[2],
+  ];
+
   return {
     ...project,
-    categoryLine: loc.categoryLine,
-    medium: loc.medium,
-    context: loc.context,
-    lead: loc.lead,
-    steps: loc.steps,
+    categoryLine:
+      project.categoryLine === base.categoryLine
+        ? loc.categoryLine
+        : project.categoryLine,
+    medium: project.medium === base.medium ? loc.medium : project.medium,
+    context: project.context === base.context ? loc.context : project.context,
+    lead: project.lead === base.lead ? loc.lead : project.lead,
+    steps: localizedSteps,
   };
 }

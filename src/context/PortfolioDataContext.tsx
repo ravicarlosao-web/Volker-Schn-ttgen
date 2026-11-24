@@ -57,7 +57,7 @@ export function PortfolioDataProvider({
   const refreshPortfolio = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/portfolio');
+      const res = await fetch('/api/portfolio', { cache: 'no-store' });
       if (!res.ok) return;
       const json = (await res.json()) as Partial<PortfolioPayload>;
       setData({

@@ -1,9 +1,11 @@
-import type {
-  FloorItem,
-  JournalEntry,
-  PortfolioCategoryId,
-  PortfolioCategoryItem,
-  StudioStat,
+import {
+  JOURNAL_ENTRIES,
+  PORTFOLIO_CATEGORIES,
+  type FloorItem,
+  type JournalEntry,
+  type PortfolioCategoryId,
+  type PortfolioCategoryItem,
+  type StudioStat,
 } from '../data/formtectureData';
 import type { Language } from './LanguageContext';
 
@@ -1041,6 +1043,11 @@ export const UI_TRANSLATIONS: Record<Language, UIStrings> = {
   },
 };
 
+const BASE_CATEGORIES_BY_ID = new Map(
+  PORTFOLIO_CATEGORIES.map((c) => [c.id, c]),
+);
+const BASE_JOURNAL_BY_ID = new Map(JOURNAL_ENTRIES.map((j) => [j.id, j]));
+
 export function getLocalizedCategory(
   category: PortfolioCategoryItem,
   language: Language,
@@ -1048,11 +1055,17 @@ export function getLocalizedCategory(
   if (language === 'en') return category;
   const localized = UI_TRANSLATIONS[language].portfolio.categories[category.id];
   if (!localized) return category;
+  const base = BASE_CATEGORIES_BY_ID.get(category.id);
+  if (!base) return category;
   return {
     ...category,
-    title: localized.title,
-    categoryLine: localized.categoryLine,
-    metaLine: localized.metaLine,
+    title: category.title === base.title ? localized.title : category.title,
+    categoryLine:
+      category.categoryLine === base.categoryLine
+        ? localized.categoryLine
+        : category.categoryLine,
+    metaLine:
+      category.metaLine === base.metaLine ? localized.metaLine : category.metaLine,
   };
 }
 
@@ -1061,6 +1074,12 @@ export function getCategoryFilterLabel(
   language: Language,
   fallbackTitle?: string,
 ): string {
+  if (categoryId !== 'ALL' && fallbackTitle) {
+    const base = BASE_CATEGORIES_BY_ID.get(categoryId);
+    if (base && fallbackTitle !== base.title) {
+      return fallbackTitle.toUpperCase();
+    }
+  }
   return (
     UI_TRANSLATIONS[language].portfolio.filters[categoryId] ??
     (fallbackTitle ? fallbackTitle.toUpperCase() : categoryId.toUpperCase())
@@ -1086,19 +1105,44 @@ export function getLocalizedJournalEntry(
   if (language === 'en') return entry;
   const loc = UI_TRANSLATIONS[language].journal.entries[entry.id];
   if (!loc) return entry;
+  const base = BASE_JOURNAL_BY_ID.get(entry.id);
+  if (!base) return entry;
+
+  const sameIntro =
+    entry.introParagraphs.length === base.introParagraphs.length &&
+    entry.introParagraphs.every((p, idx) => p === base.introParagraphs[idx]);
+
   return {
     ...entry,
-    date: loc.date,
-    title: loc.title,
-    subtitle: loc.subtitle,
-    creditLabel: loc.creditLabel,
-    creditValue: loc.creditValue,
-    secondaryLabel: loc.secondaryLabel,
-    secondaryValue: loc.secondaryValue,
-    introParagraphs: loc.introParagraphs,
-    largeHeading: loc.largeHeading,
-    largeHeadingText: loc.largeHeadingText,
-    subHeading: loc.subHeading,
-    subHeadingText: loc.subHeadingText,
+    date: entry.date === base.date ? loc.date : entry.date,
+    title: entry.title === base.title ? loc.title : entry.title,
+    subtitle: entry.subtitle === base.subtitle ? loc.subtitle : entry.subtitle,
+    creditLabel:
+      entry.creditLabel === base.creditLabel ? loc.creditLabel : entry.creditLabel,
+    creditValue:
+      entry.creditValue === base.creditValue ? loc.creditValue : entry.creditValue,
+    secondaryLabel:
+      entry.secondaryLabel === base.secondaryLabel
+        ? loc.secondaryLabel
+        : entry.secondaryLabel,
+    secondaryValue:
+      entry.secondaryValue === base.secondaryValue
+        ? loc.secondaryValue
+        : entry.secondaryValue,
+    introParagraphs: sameIntro ? loc.introParagraphs : entry.introParagraphs,
+    largeHeading:
+      entry.largeHeading === base.largeHeading
+        ? loc.largeHeading
+        : entry.largeHeading,
+    largeHeadingText:
+      entry.largeHeadingText === base.largeHeadingText
+        ? loc.largeHeadingText
+        : entry.largeHeadingText,
+    subHeading:
+      entry.subHeading === base.subHeading ? loc.subHeading : entry.subHeading,
+    subHeadingText:
+      entry.subHeadingText === base.subHeadingText
+        ? loc.subHeadingText
+        : entry.subHeadingText,
   };
 }

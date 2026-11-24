@@ -179,11 +179,17 @@ async function runSchemaAndSeed(): Promise<void> {
     args: ['model_image', MODEL_IMAGE, nowIso],
   });
 
-  // Idempotent seed for initial Portfolio Categories (only when empty)
+  const seedFlagsRes = await db.execute(
+    "SELECT key FROM site_settings WHERE key IN ('seeded_categories_v1', 'seeded_projects_v1', 'seeded_journal_v1')",
+  );
+  const seededKeys = new Set(seedFlagsRes.rows.map((r) => String(r.key)));
+
+  // Idempotent seed for initial Portfolio Categories (only on first run)
   const catCount = await db.execute(
     'SELECT COUNT(*) AS count FROM portfolio_categories',
   );
-  if (Number(catCount.rows[0]?.count ?? 0) === 0) {
+  const hasCategories = Number(catCount.rows[0]?.count ?? 0) > 0;
+  if (!hasCategories && !seededKeys.has('seeded_categories_v1')) {
     for (let i = 0; i < PORTFOLIO_CATEGORIES.length; i += 1) {
       const cat = PORTFOLIO_CATEGORIES[i];
       await db.execute({
@@ -201,10 +207,15 @@ async function runSchemaAndSeed(): Promise<void> {
       });
     }
   }
+  await db.execute({
+    sql: 'INSERT OR IGNORE INTO site_settings (key, value, updated_at) VALUES (?, ?, ?)',
+    args: ['seeded_categories_v1', '1', nowIso],
+  });
 
-  // Idempotent seed for initial Projects (only when empty)
+  // Idempotent seed for initial Projects (only on first run)
   const projCount = await db.execute('SELECT COUNT(*) AS count FROM projects');
-  if (Number(projCount.rows[0]?.count ?? 0) === 0) {
+  const hasProjects = Number(projCount.rows[0]?.count ?? 0) > 0;
+  if (!hasProjects && !seededKeys.has('seeded_projects_v1')) {
     for (let i = 0; i < PROJECTS.length; i += 1) {
       const p = PROJECTS[i];
       await db.execute({
@@ -234,12 +245,17 @@ async function runSchemaAndSeed(): Promise<void> {
       });
     }
   }
+  await db.execute({
+    sql: 'INSERT OR IGNORE INTO site_settings (key, value, updated_at) VALUES (?, ?, ?)',
+    args: ['seeded_projects_v1', '1', nowIso],
+  });
 
-  // Idempotent seed for initial Journal Entries (only when empty)
+  // Idempotent seed for initial Journal Entries (only on first run)
   const journalCount = await db.execute(
     'SELECT COUNT(*) AS count FROM journal_entries',
   );
-  if (Number(journalCount.rows[0]?.count ?? 0) === 0) {
+  const hasJournal = Number(journalCount.rows[0]?.count ?? 0) > 0;
+  if (!hasJournal && !seededKeys.has('seeded_journal_v1')) {
     for (let i = 0; i < JOURNAL_ENTRIES.length; i += 1) {
       const j = JOURNAL_ENTRIES[i];
       await db.execute({
@@ -272,6 +288,10 @@ async function runSchemaAndSeed(): Promise<void> {
       });
     }
   }
+  await db.execute({
+    sql: 'INSERT OR IGNORE INTO site_settings (key, value, updated_at) VALUES (?, ?, ?)',
+    args: ['seeded_journal_v1', '1', nowIso],
+  });
 }
 
 /**
@@ -521,13 +541,34 @@ export async function saveCategory(
   });
 }
 
-export async function removeCategory(id: string): Promise<void> {
+export async function categoryExists(id: string): Promise<boolean> {
   await initDatabase();
   const db = getDb();
-  await db.execute({
+  const res = await db.execute({
+    sql: 'SELECT 1 FROM portfolio_categories WHERE id = ? LIMIT 1',
+    args: [id],
+  });
+  return res.rows.length > 0;
+}
+
+export async function removeCategory(id: string): Promise<boolean> {
+  await initDatabase();
+  const db = getDb();
+  const res = await db.execute({
     sql: 'DELETE FROM portfolio_categories WHERE id = ?',
     args: [id],
   });
+  return res.rowsAffected > 0;
+}
+
+export async function projectExists(id: string): Promise<boolean> {
+  await initDatabase();
+  const db = getDb();
+  const res = await db.execute({
+    sql: 'SELECT 1 FROM projects WHERE id = ? LIMIT 1',
+    args: [id],
+  });
+  return res.rows.length > 0;
 }
 
 export async function saveProject(project: ProjectItem): Promise<void> {
@@ -590,13 +631,24 @@ export async function saveProject(project: ProjectItem): Promise<void> {
   });
 }
 
-export async function removeProject(id: string): Promise<void> {
+export async function removeProject(id: string): Promise<boolean> {
   await initDatabase();
   const db = getDb();
-  await db.execute({
+  const res = await db.execute({
     sql: 'DELETE FROM projects WHERE id = ?',
     args: [id],
   });
+  return res.rowsAffected > 0;
+}
+
+export async function journalEntryExists(id: string): Promise<boolean> {
+  await initDatabase();
+  const db = getDb();
+  const res = await db.execute({
+    sql: 'SELECT 1 FROM journal_entries WHERE id = ? LIMIT 1',
+    args: [id],
+  });
+  return res.rows.length > 0;
 }
 
 export async function saveJournalEntry(entry: JournalEntry): Promise<void> {
@@ -664,13 +716,14 @@ export async function saveJournalEntry(entry: JournalEntry): Promise<void> {
   });
 }
 
-export async function removeJournalEntry(id: string): Promise<void> {
+export async function removeJournalEntry(id: string): Promise<boolean> {
   await initDatabase();
   const db = getDb();
-  await db.execute({
+  const res = await db.execute({
     sql: 'DELETE FROM journal_entries WHERE id = ?',
     args: [id],
   });
+  return res.rowsAffected > 0;
 }
 
 export async function insertEnquiry(data: {
@@ -740,22 +793,24 @@ export async function listEnquiries(): Promise<EnquiryItem[]> {
 export async function updateEnquiryStatus(
   id: string,
   status: EnquiryItem['status'],
-): Promise<void> {
+): Promise<boolean> {
   await initDatabase();
   const db = getDb();
-  await db.execute({
+  const res = await db.execute({
     sql: 'UPDATE enquiries SET status = ? WHERE id = ?',
     args: [status, id],
   });
+  return res.rowsAffected > 0;
 }
 
-export async function removeEnquiry(id: string): Promise<void> {
+export async function removeEnquiry(id: string): Promise<boolean> {
   await initDatabase();
   const db = getDb();
-  await db.execute({
+  const res = await db.execute({
     sql: 'DELETE FROM enquiries WHERE id = ?',
     args: [id],
   });
+  return res.rowsAffected > 0;
 }
 
 export async function getAdminCredentialHash(): Promise<string | null> {

@@ -245,6 +245,8 @@ const EMPTY_JOURNAL: JournalEntry = {
 export function AdminPage({ onExit }: AdminPageProps) {
   const {
     heroImage: liveHeroImage,
+    practiceImage: livePracticeImage,
+    modelImage: liveModelImage,
     categories,
     projects,
     journalEntries,
@@ -288,9 +290,21 @@ export function AdminPage({ onExit }: AdminPageProps) {
   // Navigation & feedback
   const [activeTab, setActiveTab] = useState<AdminTab>('enquiries');
   const [toast, setToast] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [confirmDeleteTarget, setConfirmDeleteTarget] = useState<{
+    type: 'category' | 'work' | 'journal' | 'enquiry';
+    id: string;
+  } | null>(null);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
 
-  // Hero state
+  // Editor refs for scroll-into-view when selecting Edit
+  const categoryFormRef = useRef<HTMLFormElement | null>(null);
+  const workFormRef = useRef<HTMLFormElement | null>(null);
+  const journalFormRef = useRef<HTMLFormElement | null>(null);
+
+  // Hero & Site images state
   const [heroDraft, setHeroDraft] = useState(liveHeroImage);
+  const [practiceDraft, setPracticeDraft] = useState(livePracticeImage);
+  const [modelDraft, setModelDraft] = useState(liveModelImage);
   const [heroSaving, setHeroSaving] = useState(false);
 
   // Category state
@@ -328,6 +342,18 @@ export function AdminPage({ onExit }: AdminPageProps) {
   useEffect(() => {
     setHeroDraft(liveHeroImage);
   }, [liveHeroImage]);
+
+  useEffect(() => {
+    setPracticeDraft(livePracticeImage);
+  }, [livePracticeImage]);
+
+  useEffect(() => {
+    setModelDraft(liveModelImage);
+  }, [liveModelImage]);
+
+  useEffect(() => {
+    setConfirmDeleteTarget(null);
+  }, [activeTab]);
 
   const loadAuthStatus = useCallback(async () => {
     setAuthLoading(true);
@@ -370,15 +396,13 @@ export function AdminPage({ onExit }: AdminPageProps) {
     [token, notify],
   );
 
-  const fetchAdminStatusAndEnquiries = useCallback(async () => {
-    if (!token) return;
-    setEnquiriesLoading(true);
+  const refreshAdminStatus = useCallback(async () => {
+    if (!token) return true;
     try {
       const statusRes = await adminFetch('/api/admin/status');
-      let canPersist = true;
       if (statusRes.ok) {
         const statusJson = (await statusRes.json()) as Partial<AdminStorageState>;
-        canPersist = statusJson.persistenceEnabled ?? true;
+        const canPersist = statusJson.persistenceEnabled ?? true;
         setAdminStorage((prev) => ({
           tursoCloud: Boolean(statusJson.tursoCloud),
           persistenceEnabled: canPersist,
@@ -386,7 +410,19 @@ export function AdminPage({ onExit }: AdminPageProps) {
           sync: statusJson.sync ?? prev.sync,
           counts: statusJson.counts ?? prev.counts,
         }));
+        return canPersist;
       }
+    } catch {
+      // Keep prior status cleanly
+    }
+    return true;
+  }, [token, adminFetch]);
+
+  const fetchAdminStatusAndEnquiries = useCallback(async () => {
+    if (!token) return;
+    setEnquiriesLoading(true);
+    try {
+      const canPersist = await refreshAdminStatus();
 
       if (!canPersist) {
         setEnquiries([]);
@@ -405,7 +441,7 @@ export function AdminPage({ onExit }: AdminPageProps) {
     } finally {
       setEnquiriesLoading(false);
     }
-  }, [token, adminFetch, notify]);
+  }, [token, adminFetch, refreshAdminStatus, notify]);
 
   const fetchEnquiries = fetchAdminStatusAndEnquiries;
 
@@ -590,7 +626,7 @@ export function AdminPage({ onExit }: AdminPageProps) {
     }
   };
 
-  // --- Save Handlers ---
+  // --- Save & Delete Handlers ---
 
   const handleSaveHero = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -602,23 +638,37 @@ export function AdminPage({ onExit }: AdminPageProps) {
     try {
       const res = await adminFetch('/api/admin/hero', {
         method: 'PUT',
-        body: JSON.stringify({ heroImage: heroDraft.trim() }),
+        body: JSON.stringify({
+          heroImage: heroDraft.trim(),
+          practiceImage: practiceDraft.trim() || undefined,
+          modelImage: modelDraft.trim() || undefined,
+        }),
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
-        notify('err', body.error || 'Unable to update Hero image.');
+        notify('err', body.error || 'Unable to update site images.');
         return;
       }
       await refreshPortfolio();
-      notify('ok', 'Hero image saved to database.');
+      await refreshAdminStatus();
+      notify('ok', 'Site images saved to database.');
+    } catch {
+      notify('err', 'Network error saving site images.');
     } finally {
       setHeroSaving(false);
     }
   };
 
   const startEditCategory = (cat: PortfolioCategoryItem) => {
+    setConfirmDeleteTarget(null);
     setEditingCategoryId(cat.id);
     setCategoryDraft({ ...cat });
+    window.requestAnimationFrame(() => {
+      categoryFormRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      });
+    });
   };
 
   const resetCategoryForm = () => {
@@ -637,11 +687,14 @@ export function AdminPage({ onExit }: AdminPageProps) {
     try {
       const isEdit = editingCategoryId !== null;
       const endpoint = isEdit
-        ? `/api/admin/categories/${encodeURIComponent(editingCategoryId)}`
+        ? `/api/admin/categories?id=${encodeURIComponent(editingCategoryId)}`
         : '/api/admin/categories';
       const res = await adminFetch(endpoint, {
         method: isEdit ? 'PUT' : 'POST',
-        body: JSON.stringify(categoryDraft),
+        body: JSON.stringify({
+          ...categoryDraft,
+          ...(isEdit ? { id: editingCategoryId } : {}),
+        }),
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
@@ -649,28 +702,46 @@ export function AdminPage({ onExit }: AdminPageProps) {
         return;
       }
       await refreshPortfolio();
+      await refreshAdminStatus();
       resetCategoryForm();
       notify('ok', isEdit ? 'Category updated.' : 'Category created.');
+    } catch {
+      notify('err', 'Network error saving category.');
     } finally {
       setCategorySaving(false);
     }
   };
 
   const handleDeleteCategory = async (id: string) => {
-    const res = await adminFetch(
-      `/api/admin/categories/${encodeURIComponent(id)}`,
-      { method: 'DELETE' },
-    );
-    if (!res.ok) {
-      notify('err', 'Unable to delete category.');
-      return;
+    const key = `category:${id}`;
+    setDeletingKey(key);
+    try {
+      const res = await adminFetch(
+        `/api/admin/categories?id=${encodeURIComponent(id)}`,
+        { method: 'DELETE' },
+      );
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        notify('err', body.error || 'Unable to delete category.');
+        if (res.status === 404) {
+          await refreshPortfolio();
+        }
+        return;
+      }
+      setConfirmDeleteTarget(null);
+      if (editingCategoryId === id) resetCategoryForm();
+      await refreshPortfolio();
+      await refreshAdminStatus();
+      notify('ok', 'Category deleted.');
+    } catch {
+      notify('err', 'Network error deleting category.');
+    } finally {
+      setDeletingKey(null);
     }
-    if (editingCategoryId === id) resetCategoryForm();
-    await refreshPortfolio();
-    notify('ok', 'Category deleted.');
   };
 
   const startEditWork = (work: ProjectItem) => {
+    setConfirmDeleteTarget(null);
     setEditingWorkId(work.id);
     setWorkDraft({
       ...work,
@@ -680,6 +751,12 @@ export function AdminPage({ onExit }: AdminPageProps) {
         { ...work.steps[1] },
         { ...work.steps[2] },
       ],
+    });
+    window.requestAnimationFrame(() => {
+      workFormRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      });
     });
   };
 
@@ -723,32 +800,56 @@ export function AdminPage({ onExit }: AdminPageProps) {
         return;
       }
       await refreshPortfolio();
+      await refreshAdminStatus();
       resetWorkForm();
       notify('ok', isEdit ? 'Artwork updated.' : 'Artwork published.');
+    } catch {
+      notify('err', 'Network error saving artwork.');
     } finally {
       setWorkSaving(false);
     }
   };
 
   const handleDeleteWork = async (id: string) => {
-    const res = await adminFetch(
-      `/api/admin/projects/${encodeURIComponent(id)}`,
-      { method: 'DELETE' },
-    );
-    if (!res.ok) {
-      notify('err', 'Unable to delete artwork.');
-      return;
+    const key = `work:${id}`;
+    setDeletingKey(key);
+    try {
+      const res = await adminFetch(
+        `/api/admin/projects/${encodeURIComponent(id)}`,
+        { method: 'DELETE' },
+      );
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        notify('err', body.error || 'Unable to delete artwork.');
+        if (res.status === 404) {
+          await refreshPortfolio();
+        }
+        return;
+      }
+      setConfirmDeleteTarget(null);
+      if (editingWorkId === id) resetWorkForm();
+      await refreshPortfolio();
+      await refreshAdminStatus();
+      notify('ok', 'Artwork removed.');
+    } catch {
+      notify('err', 'Network error deleting artwork.');
+    } finally {
+      setDeletingKey(null);
     }
-    if (editingWorkId === id) resetWorkForm();
-    await refreshPortfolio();
-    notify('ok', 'Artwork removed.');
   };
 
   const startEditJournal = (entry: JournalEntry) => {
+    setConfirmDeleteTarget(null);
     setEditingJournalId(entry.id);
     setJournalDraft({ ...entry });
     setIntroText(entry.introParagraphs.join('\n\n'));
     setDetailsText(entry.details.join('\n'));
+    window.requestAnimationFrame(() => {
+      journalFormRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      });
+    });
   };
 
   const resetJournalForm = () => {
@@ -799,58 +900,90 @@ export function AdminPage({ onExit }: AdminPageProps) {
         return;
       }
       await refreshPortfolio();
+      await refreshAdminStatus();
       resetJournalForm();
       notify('ok', isEdit ? 'Journal entry updated.' : 'Journal entry published.');
+    } catch {
+      notify('err', 'Network error saving journal entry.');
     } finally {
       setJournalSaving(false);
     }
   };
 
   const handleDeleteJournal = async (id: string) => {
-    const res = await adminFetch(
-      `/api/admin/journal/${encodeURIComponent(id)}`,
-      { method: 'DELETE' },
-    );
-    if (!res.ok) {
-      notify('err', 'Unable to delete journal entry.');
-      return;
+    const key = `journal:${id}`;
+    setDeletingKey(key);
+    try {
+      const res = await adminFetch(
+        `/api/admin/journal/${encodeURIComponent(id)}`,
+        { method: 'DELETE' },
+      );
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        notify('err', body.error || 'Unable to delete journal entry.');
+        if (res.status === 404) {
+          await refreshPortfolio();
+        }
+        return;
+      }
+      setConfirmDeleteTarget(null);
+      if (editingJournalId === id) resetJournalForm();
+      await refreshPortfolio();
+      await refreshAdminStatus();
+      notify('ok', 'Journal entry deleted.');
+    } catch {
+      notify('err', 'Network error deleting journal entry.');
+    } finally {
+      setDeletingKey(null);
     }
-    if (editingJournalId === id) resetJournalForm();
-    await refreshPortfolio();
-    notify('ok', 'Journal entry deleted.');
   };
 
   const handleUpdateEnquiryStatus = async (
     id: string,
     status: EnquiryItem['status'],
   ) => {
-    const res = await adminFetch(
-      `/api/admin/enquiries/${encodeURIComponent(id)}`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({ status }),
-      },
-    );
-    if (!res.ok) {
-      notify('err', 'Unable to update status.');
-      return;
+    try {
+      const res = await adminFetch(
+        `/api/admin/enquiries/${encodeURIComponent(id)}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ status }),
+        },
+      );
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        notify('err', body.error || 'Unable to update status.');
+        return;
+      }
+      setEnquiries((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, status } : item)),
+      );
+    } catch {
+      notify('err', 'Network error updating enquiry status.');
     }
-    setEnquiries((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status } : item)),
-    );
   };
 
   const handleDeleteEnquiry = async (id: string) => {
-    const res = await adminFetch(
-      `/api/admin/enquiries/${encodeURIComponent(id)}`,
-      { method: 'DELETE' },
-    );
-    if (!res.ok) {
-      notify('err', 'Unable to delete enquiry.');
-      return;
+    const key = `enquiry:${id}`;
+    setDeletingKey(key);
+    try {
+      const res = await adminFetch(
+        `/api/admin/enquiries/${encodeURIComponent(id)}`,
+        { method: 'DELETE' },
+      );
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        notify('err', body.error || 'Unable to delete enquiry.');
+        return;
+      }
+      setConfirmDeleteTarget(null);
+      setEnquiries((prev) => prev.filter((item) => item.id !== id));
+      notify('ok', 'Enquiry deleted.');
+    } catch {
+      notify('err', 'Network error deleting enquiry.');
+    } finally {
+      setDeletingKey(null);
     }
-    setEnquiries((prev) => prev.filter((item) => item.id !== id));
-    notify('ok', 'Enquiry deleted.');
   };
 
   const handleMigrateToCloud = async () => {
@@ -1121,8 +1254,8 @@ export function AdminPage({ onExit }: AdminPageProps) {
     {
       id: 'hero',
       code: '02',
-      label: 'HERO IMAGE',
-      meta: '01',
+      label: 'SITE IMAGES',
+      meta: '03',
     },
     {
       id: 'categories',
@@ -1516,14 +1649,43 @@ export function AdminPage({ onExit }: AdminPageProps) {
                         )}
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => void handleDeleteEnquiry(item.id)}
-                        className="inline-flex items-center gap-1.5 border border-black/25 px-3 py-1.5 font-mono text-[10px] tracking-[0.12em] uppercase text-red-700 hover:bg-red-700 hover:text-white hover:border-red-700 transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        <span>DELETE</span>
-                      </button>
+                      {confirmDeleteTarget?.type === 'enquiry' &&
+                      confirmDeleteTarget.id === item.id ? (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={deletingKey === `enquiry:${item.id}`}
+                            onClick={() => void handleDeleteEnquiry(item.id)}
+                            className="border border-red-700 bg-red-700 text-white px-3 py-1.5 font-mono text-[10px] tracking-[0.12em] uppercase hover:bg-red-800 transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            {deletingKey === `enquiry:${item.id}`
+                              ? 'DELETING...'
+                              : 'CONFIRM DELETE'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={deletingKey === `enquiry:${item.id}`}
+                            onClick={() => setConfirmDeleteTarget(null)}
+                            className="border border-black/25 px-3 py-1.5 font-mono text-[10px] tracking-[0.12em] uppercase text-black hover:border-black cursor-pointer disabled:opacity-50"
+                          >
+                            CANCEL
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setConfirmDeleteTarget({
+                              type: 'enquiry',
+                              id: item.id,
+                            })
+                          }
+                          className="inline-flex items-center gap-1.5 border border-black/25 px-3 py-1.5 font-mono text-[10px] tracking-[0.12em] uppercase text-red-700 hover:bg-red-700 hover:text-white hover:border-red-700 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>DELETE</span>
+                        </button>
+                      )}
                     </div>
                   </article>
                 ))}
@@ -1532,19 +1694,22 @@ export function AdminPage({ onExit }: AdminPageProps) {
           </section>
         )}
 
-        {/* ================= TAB 2: HERO IMAGE ================= */}
+        {/* ================= TAB 2: HERO & SITE IMAGES ================= */}
         {activeTab === 'hero' && (
           <section className="max-w-[920px] space-y-8">
             <div className="pb-5 border-b border-black/20">
               <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[#666666]">
-                LANDING OPENING VISUAL
+                LANDING OPENING &amp; EDITORIAL VISUALS
               </span>
               <h2 className="mt-1 text-[30px] font-normal tracking-[-0.02em]">
-                Hero Background Image
+                Hero &amp; Studio Images
               </h2>
             </div>
 
-            <form onSubmit={handleSaveHero} className="space-y-6 border border-black/20 p-6 sm:p-8">
+            <form
+              onSubmit={handleSaveHero}
+              className="space-y-8 border border-black/20 p-6 sm:p-8"
+            >
               <ImageField
                 label="HERO FULL-BLEED PHOTOGRAPH"
                 value={heroDraft}
@@ -1554,10 +1719,33 @@ export function AdminPage({ onExit }: AdminPageProps) {
                 previewAspect="aspect-[16/9]"
               />
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-black/15">
+                <ImageField
+                  label="PRACTICE SECTION PHOTOGRAPH"
+                  value={practiceDraft}
+                  onChange={setPracticeDraft}
+                  onUploadFile={handleUploadImage}
+                  cloudinaryConfigured={cloudinaryConfigured}
+                  previewAspect="aspect-[4/4]"
+                />
+                <ImageField
+                  label="STUDIO SECTION PHOTOGRAPH"
+                  value={modelDraft}
+                  onChange={setModelDraft}
+                  onUploadFile={handleUploadImage}
+                  cloudinaryConfigured={cloudinaryConfigured}
+                  previewAspect="aspect-[4/4]"
+                />
+              </div>
+
               <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-black/15">
                 <button
                   type="button"
-                  onClick={() => setHeroDraft(liveHeroImage)}
+                  onClick={() => {
+                    setHeroDraft(liveHeroImage);
+                    setPracticeDraft(livePracticeImage);
+                    setModelDraft(liveModelImage);
+                  }}
                   className="border border-black/25 px-4 py-3 font-mono text-[10px] tracking-[0.12em] uppercase text-black hover:border-black cursor-pointer"
                 >
                   REVERT TO SAVED
@@ -1568,7 +1756,9 @@ export function AdminPage({ onExit }: AdminPageProps) {
                   className="inline-flex items-center gap-3 border border-black bg-black text-white px-6 py-3 font-mono text-[10px] tracking-[0.14em] uppercase hover:bg-black/85 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   <ImagePlus className="w-3.5 h-3.5" />
-                  <span>{heroSaving ? 'SAVING...' : 'UPDATE HERO IMAGE'}</span>
+                  <span>
+                    {heroSaving ? 'SAVING...' : 'UPDATE SITE IMAGES'}
+                  </span>
                 </button>
               </div>
             </form>
@@ -1600,54 +1790,97 @@ export function AdminPage({ onExit }: AdminPageProps) {
               </div>
 
               <div className="space-y-3">
-                {categories.map((cat) => (
-                  <div
-                    key={cat.id}
-                    className={`border p-4 flex items-center gap-4 ${
-                      editingCategoryId === cat.id
-                        ? 'border-black bg-[#fafafa]'
-                        : 'border-black/20 bg-white'
-                    }`}
-                  >
-                    <img
-                      src={cat.image}
-                      alt={cat.title}
-                      className="w-14 h-20 object-cover border border-black/15 shrink-0"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <span className="font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666]">
-                        {cat.code} · ID: {cat.id}
-                      </span>
-                      <h3 className="text-[18px] font-normal text-black truncate">
-                        {cat.title}
-                      </h3>
-                      <p className="font-mono text-[10px] tracking-[0.06em] uppercase text-[#595959] truncate">
-                        {cat.categoryLine}
-                      </p>
+                {categories.map((cat) => {
+                  const isConfirming =
+                    confirmDeleteTarget?.type === 'category' &&
+                    confirmDeleteTarget.id === cat.id;
+                  const isDeleting = deletingKey === `category:${cat.id}`;
+                  const linkedWorksCount = projects.filter(
+                    (p) => p.portfolioCategory === cat.id,
+                  ).length;
+
+                  return (
+                    <div
+                      key={cat.id}
+                      className={`border p-4 flex items-center gap-4 ${
+                        editingCategoryId === cat.id
+                          ? 'border-black bg-[#fafafa]'
+                          : 'border-black/20 bg-white'
+                      }`}
+                    >
+                      <img
+                        src={cat.image}
+                        alt={cat.title}
+                        className="w-14 h-20 object-cover border border-black/15 shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <span className="font-mono text-[10px] tracking-[0.12em] uppercase text-[#666666]">
+                          {cat.code} · ID: {cat.id}
+                        </span>
+                        <h3 className="text-[18px] font-normal text-black truncate">
+                          {cat.title}
+                        </h3>
+                        <p className="font-mono text-[10px] tracking-[0.06em] uppercase text-[#595959] truncate">
+                          {cat.categoryLine}
+                        </p>
+                        {isConfirming && linkedWorksCount > 0 && (
+                          <p className="mt-1 font-mono text-[9px] tracking-[0.08em] uppercase text-red-700">
+                            {linkedWorksCount} ARTWORK{linkedWorksCount === 1 ? '' : 'S'} LINKED
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          disabled={isDeleting}
+                          onClick={() => startEditCategory(cat)}
+                          className="border border-black/30 px-3 py-1 font-mono text-[10px] tracking-[0.12em] uppercase hover:bg-black hover:text-white cursor-pointer disabled:opacity-50"
+                        >
+                          EDIT
+                        </button>
+                        {isConfirming ? (
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              disabled={isDeleting}
+                              onClick={() => void handleDeleteCategory(cat.id)}
+                              className="border border-red-700 bg-red-700 text-white px-2 py-1 font-mono text-[9px] tracking-[0.1em] uppercase hover:bg-red-800 cursor-pointer disabled:opacity-50"
+                            >
+                              {isDeleting ? '...' : 'CONFIRM'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isDeleting}
+                              onClick={() => setConfirmDeleteTarget(null)}
+                              className="border border-black/25 px-2 py-1 font-mono text-[9px] tracking-[0.1em] uppercase text-black hover:border-black cursor-pointer disabled:opacity-50"
+                            >
+                              NO
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setConfirmDeleteTarget({
+                                type: 'category',
+                                id: cat.id,
+                              })
+                            }
+                            className="border border-black/20 px-3 py-1 font-mono text-[10px] tracking-[0.12em] uppercase text-red-700 hover:bg-red-700 hover:text-white cursor-pointer"
+                          >
+                            DELETE
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => startEditCategory(cat)}
-                        className="border border-black/30 px-3 py-1 font-mono text-[10px] tracking-[0.12em] uppercase hover:bg-black hover:text-white cursor-pointer"
-                      >
-                        EDIT
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleDeleteCategory(cat.id)}
-                        className="border border-black/20 px-3 py-1 font-mono text-[10px] tracking-[0.12em] uppercase text-red-700 hover:bg-red-700 hover:text-white cursor-pointer"
-                      >
-                        DELETE
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
             {/* Form */}
             <form
+              ref={categoryFormRef}
               onSubmit={handleSaveCategory}
               className="lg:col-span-6 border border-black/20 p-6 sm:p-8 space-y-6 bg-white"
             >
@@ -1811,51 +2044,86 @@ export function AdminPage({ onExit }: AdminPageProps) {
               />
 
               <div className="space-y-3 max-h-[760px] overflow-y-auto pr-1">
-                {filteredWorks.map((work) => (
-                  <div
-                    key={work.id}
-                    className={`border p-3.5 flex items-center gap-3.5 ${
-                      editingWorkId === work.id
-                        ? 'border-black bg-[#fafafa]'
-                        : 'border-black/20 bg-white'
-                    }`}
-                  >
-                    <img
-                      src={work.image}
-                      alt={work.title}
-                      className="w-14 h-16 object-cover border border-black/15 shrink-0"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-[#666666]">
-                        {work.floor} · {work.portfolioCategory} · {work.year}
-                      </span>
-                      <h3 className="text-[16px] font-normal text-black truncate">
-                        {work.title}
-                      </h3>
+                {filteredWorks.map((work) => {
+                  const isConfirming =
+                    confirmDeleteTarget?.type === 'work' &&
+                    confirmDeleteTarget.id === work.id;
+                  const isDeleting = deletingKey === `work:${work.id}`;
+
+                  return (
+                    <div
+                      key={work.id}
+                      className={`border p-3.5 flex items-center gap-3.5 ${
+                        editingWorkId === work.id
+                          ? 'border-black bg-[#fafafa]'
+                          : 'border-black/20 bg-white'
+                      }`}
+                    >
+                      <img
+                        src={work.image}
+                        alt={work.title}
+                        className="w-14 h-16 object-cover border border-black/15 shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-[#666666]">
+                          {work.floor} · {work.portfolioCategory} · {work.year}
+                        </span>
+                        <h3 className="text-[16px] font-normal text-black truncate">
+                          {work.title}
+                        </h3>
+                      </div>
+                      <div className="flex flex-col gap-1 shrink-0">
+                        <button
+                          type="button"
+                          disabled={isDeleting}
+                          onClick={() => startEditWork(work)}
+                          className="border border-black/30 px-2.5 py-1 font-mono text-[10px] tracking-[0.1em] uppercase hover:bg-black hover:text-white cursor-pointer disabled:opacity-50"
+                        >
+                          EDIT
+                        </button>
+                        {isConfirming ? (
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              disabled={isDeleting}
+                              onClick={() => void handleDeleteWork(work.id)}
+                              className="border border-red-700 bg-red-700 text-white px-2 py-1 font-mono text-[9px] tracking-[0.1em] uppercase hover:bg-red-800 cursor-pointer disabled:opacity-50"
+                            >
+                              {isDeleting ? '...' : 'OK'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isDeleting}
+                              onClick={() => setConfirmDeleteTarget(null)}
+                              className="border border-black/25 px-2 py-1 font-mono text-[9px] tracking-[0.1em] uppercase text-black hover:border-black cursor-pointer disabled:opacity-50"
+                            >
+                              NO
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setConfirmDeleteTarget({
+                                type: 'work',
+                                id: work.id,
+                              })
+                            }
+                            className="border border-black/20 px-2.5 py-1 font-mono text-[10px] tracking-[0.1em] uppercase text-red-700 hover:bg-red-700 hover:text-white cursor-pointer"
+                          >
+                            DEL
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <button
-                        type="button"
-                        onClick={() => startEditWork(work)}
-                        className="border border-black/30 px-2.5 py-1 font-mono text-[10px] tracking-[0.1em] uppercase hover:bg-black hover:text-white cursor-pointer"
-                      >
-                        EDIT
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleDeleteWork(work.id)}
-                        className="border border-black/20 px-2.5 py-1 font-mono text-[10px] tracking-[0.1em] uppercase text-red-700 hover:bg-red-700 hover:text-white cursor-pointer"
-                      >
-                        DEL
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
             {/* Work editor */}
             <form
+              ref={workFormRef}
               onSubmit={handleSaveWork}
               className="lg:col-span-7 border border-black/20 p-6 sm:p-8 space-y-6 bg-white"
             >
@@ -1934,6 +2202,14 @@ export function AdminPage({ onExit }: AdminPageProps) {
                     }
                     className="w-full bg-transparent border-b border-black/25 focus:border-black py-2 text-[14px] focus:outline-none"
                   >
+                    {workDraft.portfolioCategory &&
+                      !categories.some(
+                        (cat) => cat.id === workDraft.portfolioCategory,
+                      ) && (
+                        <option value={workDraft.portfolioCategory}>
+                          {workDraft.portfolioCategory} (ARCHIVED)
+                        </option>
+                      )}
                     {categories.map((cat) => (
                       <option key={cat.id} value={cat.id}>
                         {cat.title} ({cat.id})
@@ -2149,51 +2425,86 @@ export function AdminPage({ onExit }: AdminPageProps) {
               </div>
 
               <div className="space-y-3">
-                {journalEntries.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className={`border p-4 flex items-center gap-4 ${
-                      editingJournalId === entry.id
-                        ? 'border-black bg-[#fafafa]'
-                        : 'border-black/20 bg-white'
-                    }`}
-                  >
-                    <img
-                      src={entry.image}
-                      alt={entry.title}
-                      className="w-16 h-16 object-cover border border-black/15 shrink-0"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-[#666666]">
-                        {entry.category} · {entry.date}
-                      </span>
-                      <h3 className="text-[16px] font-normal text-black line-clamp-2">
-                        {entry.title}
-                      </h3>
+                {journalEntries.map((entry) => {
+                  const isConfirming =
+                    confirmDeleteTarget?.type === 'journal' &&
+                    confirmDeleteTarget.id === entry.id;
+                  const isDeleting = deletingKey === `journal:${entry.id}`;
+
+                  return (
+                    <div
+                      key={entry.id}
+                      className={`border p-4 flex items-center gap-4 ${
+                        editingJournalId === entry.id
+                          ? 'border-black bg-[#fafafa]'
+                          : 'border-black/20 bg-white'
+                      }`}
+                    >
+                      <img
+                        src={entry.image}
+                        alt={entry.title}
+                        className="w-16 h-16 object-cover border border-black/15 shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-[#666666]">
+                          {entry.category} · {entry.date}
+                        </span>
+                        <h3 className="text-[16px] font-normal text-black line-clamp-2">
+                          {entry.title}
+                        </h3>
+                      </div>
+                      <div className="flex flex-col gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          disabled={isDeleting}
+                          onClick={() => startEditJournal(entry)}
+                          className="border border-black/30 px-2.5 py-1 font-mono text-[10px] tracking-[0.1em] uppercase hover:bg-black hover:text-white cursor-pointer disabled:opacity-50"
+                        >
+                          EDIT
+                        </button>
+                        {isConfirming ? (
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              disabled={isDeleting}
+                              onClick={() => void handleDeleteJournal(entry.id)}
+                              className="border border-red-700 bg-red-700 text-white px-2 py-1 font-mono text-[9px] tracking-[0.1em] uppercase hover:bg-red-800 cursor-pointer disabled:opacity-50"
+                            >
+                              {isDeleting ? '...' : 'OK'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isDeleting}
+                              onClick={() => setConfirmDeleteTarget(null)}
+                              className="border border-black/25 px-2 py-1 font-mono text-[9px] tracking-[0.1em] uppercase text-black hover:border-black cursor-pointer disabled:opacity-50"
+                            >
+                              NO
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setConfirmDeleteTarget({
+                                type: 'journal',
+                                id: entry.id,
+                              })
+                            }
+                            className="border border-black/20 px-2.5 py-1 font-mono text-[10px] tracking-[0.1em] uppercase text-red-700 hover:bg-red-700 hover:text-white cursor-pointer"
+                          >
+                            DEL
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => startEditJournal(entry)}
-                        className="border border-black/30 px-2.5 py-1 font-mono text-[10px] tracking-[0.1em] uppercase hover:bg-black hover:text-white cursor-pointer"
-                      >
-                        EDIT
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleDeleteJournal(entry.id)}
-                        className="border border-black/20 px-2.5 py-1 font-mono text-[10px] tracking-[0.1em] uppercase text-red-700 hover:bg-red-700 hover:text-white cursor-pointer"
-                      >
-                        DEL
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
             {/* Journal Form */}
             <form
+              ref={journalFormRef}
               onSubmit={handleSaveJournal}
               className="lg:col-span-7 border border-black/20 p-6 sm:p-8 space-y-6 bg-white"
             >
