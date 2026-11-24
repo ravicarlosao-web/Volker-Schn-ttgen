@@ -12,15 +12,39 @@ import {
 } from '../src/data/formtectureData.ts';
 
 let clientInstance: Client | null = null;
+let initPromise: Promise<void> | null = null;
 
 export function isTursoCloudConfigured(): boolean {
-  return Boolean(
-    process.env.TURSO_DATABASE_URL &&
-      process.env.TURSO_DATABASE_URL.trim().length > 0,
+  return Boolean(process.env.TURSO_DATABASE_URL?.trim());
+}
+
+export function isServerlessOrProd(): boolean {
+  return (
+    Boolean(process.env.VERCEL) || process.env.NODE_ENV === 'production'
   );
 }
 
+/**
+ * In production/Vercel, persistence is ONLY active when TURSO_DATABASE_URL is configured.
+ * Never writes local-studio.db onto read-only/ephemeral serverless filesystems.
+ * Locally in `npm run dev`, falls back cleanly to `file:local-studio.db`.
+ */
+export function isPersistenceEnabled(): boolean {
+  if (isTursoCloudConfigured()) return true;
+  return !isServerlessOrProd();
+}
+
+export class DatabaseNotConfiguredError extends Error {
+  constructor() {
+    super('Database not configured');
+    this.name = 'DatabaseNotConfiguredError';
+  }
+}
+
 export function getDb(): Client {
+  if (!isPersistenceEnabled()) {
+    throw new DatabaseNotConfiguredError();
+  }
   if (clientInstance) return clientInstance;
 
   const tursoUrl = process.env.TURSO_DATABASE_URL?.trim();
@@ -40,10 +64,7 @@ export function getDb(): Client {
   return clientInstance;
 }
 
-let initialized = false;
-
-export async function initDatabase(): Promise<void> {
-  if (initialized) return;
+async function runSchemaAndSeed(): Promise<void> {
   const db = getDb();
 
   await db.execute(`
@@ -133,19 +154,21 @@ export async function initDatabase(): Promise<void> {
     )
   `);
 
-  // Seed Hero image setting if absent
-  const heroRow = await db.execute({
-    sql: 'SELECT value FROM site_settings WHERE key = ?',
-    args: ['hero_image'],
-  });
-  if (heroRow.rows.length === 0) {
-    await db.execute({
-      sql: 'INSERT INTO site_settings (key, value, updated_at) VALUES (?, ?, ?)',
-      args: ['hero_image', HERO_IMAGE, new Date().toISOString()],
-    });
-  }
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS login_attempts (
+      ip_hash TEXT PRIMARY KEY,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      reset_at INTEGER NOT NULL
+    )
+  `);
 
-  // Seed initial Portfolio Categories if empty
+  // Idempotent seed for Hero image setting
+  await db.execute({
+    sql: 'INSERT OR IGNORE INTO site_settings (key, value, updated_at) VALUES (?, ?, ?)',
+    args: ['hero_image', HERO_IMAGE, new Date().toISOString()],
+  });
+
+  // Idempotent seed for initial Portfolio Categories (only when empty)
   const catCount = await db.execute(
     'SELECT COUNT(*) AS count FROM portfolio_categories',
   );
@@ -153,7 +176,7 @@ export async function initDatabase(): Promise<void> {
     for (let i = 0; i < PORTFOLIO_CATEGORIES.length; i += 1) {
       const cat = PORTFOLIO_CATEGORIES[i];
       await db.execute({
-        sql: `INSERT INTO portfolio_categories (id, code, title, category_line, meta_line, image, sort_order)
+        sql: `INSERT OR IGNORE INTO portfolio_categories (id, code, title, category_line, meta_line, image, sort_order)
               VALUES (?, ?, ?, ?, ?, ?, ?)`,
         args: [
           cat.id,
@@ -168,13 +191,13 @@ export async function initDatabase(): Promise<void> {
     }
   }
 
-  // Seed initial Projects if empty
+  // Idempotent seed for initial Projects (only when empty)
   const projCount = await db.execute('SELECT COUNT(*) AS count FROM projects');
   if (Number(projCount.rows[0]?.count ?? 0) === 0) {
     for (let i = 0; i < PROJECTS.length; i += 1) {
       const p = PROJECTS[i];
       await db.execute({
-        sql: `INSERT INTO projects (
+        sql: `INSERT OR IGNORE INTO projects (
                 id, floor, title, location, year, typology, portfolio_category,
                 category_line, medium, context, lead, image, gallery_json, steps_json,
                 featured, sort_order
@@ -201,7 +224,7 @@ export async function initDatabase(): Promise<void> {
     }
   }
 
-  // Seed initial Journal Entries if empty
+  // Idempotent seed for initial Journal Entries (only when empty)
   const journalCount = await db.execute(
     'SELECT COUNT(*) AS count FROM journal_entries',
   );
@@ -209,7 +232,7 @@ export async function initDatabase(): Promise<void> {
     for (let i = 0; i < JOURNAL_ENTRIES.length; i += 1) {
       const j = JOURNAL_ENTRIES[i];
       await db.execute({
-        sql: `INSERT INTO journal_entries (
+        sql: `INSERT OR IGNORE INTO journal_entries (
                 id, date, category, title, subtitle, image,
                 credit_label, credit_value, secondary_label, secondary_value,
                 intro_paragraphs_json, large_heading, large_heading_text,
@@ -238,8 +261,21 @@ export async function initDatabase(): Promise<void> {
       });
     }
   }
+}
 
-  initialized = true;
+/**
+ * Memoized once-per-instance database schema & seed initializer.
+ * Resets memoized promise on transient error so subsequent requests can retry.
+ */
+export async function initDatabase(): Promise<void> {
+  if (!isPersistenceEnabled()) return;
+  if (!initPromise) {
+    initPromise = runSchemaAndSeed().catch((err) => {
+      initPromise = null;
+      throw err;
+    });
+  }
+  await initPromise;
 }
 
 export async function getPublicPortfolio(): Promise<{
@@ -248,6 +284,16 @@ export async function getPublicPortfolio(): Promise<{
   projects: ProjectItem[];
   journalEntries: JournalEntry[];
 }> {
+  if (!isPersistenceEnabled()) {
+    return {
+      heroImage: HERO_IMAGE,
+      categories: PORTFOLIO_CATEGORIES,
+      projects: PROJECTS,
+      journalEntries: JOURNAL_ENTRIES,
+    };
+  }
+
+  await initDatabase();
   const db = getDb();
 
   const [heroRes, catRes, projRes, journalRes] = await Promise.all([
@@ -258,12 +304,8 @@ export async function getPublicPortfolio(): Promise<{
     db.execute(
       'SELECT id, code, title, category_line, meta_line, image FROM portfolio_categories ORDER BY sort_order ASC, code ASC',
     ),
-    db.execute(
-      'SELECT * FROM projects ORDER BY sort_order ASC, floor ASC',
-    ),
-    db.execute(
-      'SELECT * FROM journal_entries ORDER BY sort_order ASC',
-    ),
+    db.execute('SELECT * FROM projects ORDER BY sort_order ASC, floor ASC'),
+    db.execute('SELECT * FROM journal_entries ORDER BY sort_order ASC'),
   ]);
 
   const heroImage =
@@ -367,6 +409,7 @@ export async function getPublicPortfolio(): Promise<{
 }
 
 export async function updateHeroImageSetting(url: string): Promise<void> {
+  await initDatabase();
   const db = getDb();
   await db.execute({
     sql: `INSERT INTO site_settings (key, value, updated_at)
@@ -380,6 +423,7 @@ export async function saveCategory(
   category: PortfolioCategoryItem,
   sortOrder?: number,
 ): Promise<void> {
+  await initDatabase();
   const db = getDb();
   const existing = await db.execute({
     sql: 'SELECT sort_order FROM portfolio_categories WHERE id = ?',
@@ -418,6 +462,7 @@ export async function saveCategory(
 }
 
 export async function removeCategory(id: string): Promise<void> {
+  await initDatabase();
   const db = getDb();
   await db.execute({
     sql: 'DELETE FROM portfolio_categories WHERE id = ?',
@@ -426,6 +471,7 @@ export async function removeCategory(id: string): Promise<void> {
 }
 
 export async function saveProject(project: ProjectItem): Promise<void> {
+  await initDatabase();
   const db = getDb();
   const existing = await db.execute({
     sql: 'SELECT sort_order FROM projects WHERE id = ?',
@@ -485,6 +531,7 @@ export async function saveProject(project: ProjectItem): Promise<void> {
 }
 
 export async function removeProject(id: string): Promise<void> {
+  await initDatabase();
   const db = getDb();
   await db.execute({
     sql: 'DELETE FROM projects WHERE id = ?',
@@ -493,6 +540,7 @@ export async function removeProject(id: string): Promise<void> {
 }
 
 export async function saveJournalEntry(entry: JournalEntry): Promise<void> {
+  await initDatabase();
   const db = getDb();
   const existing = await db.execute({
     sql: 'SELECT sort_order FROM journal_entries WHERE id = ?',
@@ -557,6 +605,7 @@ export async function saveJournalEntry(entry: JournalEntry): Promise<void> {
 }
 
 export async function removeJournalEntry(id: string): Promise<void> {
+  await initDatabase();
   const db = getDb();
   await db.execute({
     sql: 'DELETE FROM journal_entries WHERE id = ?',
@@ -573,6 +622,7 @@ export async function insertEnquiry(data: {
   scope: string;
   message: string;
 }): Promise<EnquiryItem> {
+  await initDatabase();
   const db = getDb();
   const record: EnquiryItem = {
     id: crypto.randomUUID(),
@@ -608,6 +658,7 @@ export async function insertEnquiry(data: {
 }
 
 export async function listEnquiries(): Promise<EnquiryItem[]> {
+  await initDatabase();
   const db = getDb();
   const res = await db.execute(
     'SELECT * FROM enquiries ORDER BY created_at DESC',
@@ -630,6 +681,7 @@ export async function updateEnquiryStatus(
   id: string,
   status: EnquiryItem['status'],
 ): Promise<void> {
+  await initDatabase();
   const db = getDb();
   await db.execute({
     sql: 'UPDATE enquiries SET status = ? WHERE id = ?',
@@ -638,6 +690,7 @@ export async function updateEnquiryStatus(
 }
 
 export async function removeEnquiry(id: string): Promise<void> {
+  await initDatabase();
   const db = getDb();
   await db.execute({
     sql: 'DELETE FROM enquiries WHERE id = ?',
@@ -646,6 +699,8 @@ export async function removeEnquiry(id: string): Promise<void> {
 }
 
 export async function getAdminCredentialHash(): Promise<string | null> {
+  if (!isPersistenceEnabled()) return null;
+  await initDatabase();
   const db = getDb();
   const res = await db.execute(
     'SELECT password_hash FROM admin_credentials WHERE id = 1',
@@ -655,6 +710,7 @@ export async function getAdminCredentialHash(): Promise<string | null> {
 }
 
 export async function claimInitialAdminHash(hash: string): Promise<boolean> {
+  await initDatabase();
   const db = getDb();
   try {
     await db.execute({
@@ -665,4 +721,47 @@ export async function claimInitialAdminHash(hash: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export async function getDbLoginAttempt(
+  ipHash: string,
+): Promise<{ attempts: number; resetAt: number } | null> {
+  if (!isPersistenceEnabled()) return null;
+  await initDatabase();
+  const db = getDb();
+  const res = await db.execute({
+    sql: 'SELECT attempts, reset_at FROM login_attempts WHERE ip_hash = ?',
+    args: [ipHash],
+  });
+  if (res.rows.length === 0) return null;
+  return {
+    attempts: Number(res.rows[0].attempts ?? 0),
+    resetAt: Number(res.rows[0].reset_at ?? 0),
+  };
+}
+
+export async function saveDbLoginAttempt(
+  ipHash: string,
+  attempts: number,
+  resetAt: number,
+): Promise<void> {
+  if (!isPersistenceEnabled()) return;
+  await initDatabase();
+  const db = getDb();
+  await db.execute({
+    sql: `INSERT INTO login_attempts (ip_hash, attempts, reset_at)
+          VALUES (?, ?, ?)
+          ON CONFLICT(ip_hash) DO UPDATE SET attempts = excluded.attempts, reset_at = excluded.reset_at`,
+    args: [ipHash, attempts, resetAt],
+  });
+}
+
+export async function clearDbLoginAttempt(ipHash: string): Promise<void> {
+  if (!isPersistenceEnabled()) return;
+  await initDatabase();
+  const db = getDb();
+  await db.execute({
+    sql: 'DELETE FROM login_attempts WHERE ip_hash = ?',
+    args: [ipHash],
+  });
 }

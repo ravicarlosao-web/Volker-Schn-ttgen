@@ -1,3 +1,5 @@
+import { isCloudinaryConfigured, isTrustedCloudinaryUrl } from './cloudinary.ts';
+
 export function cleanString(
   value: unknown,
   maxLength = 500,
@@ -15,12 +17,19 @@ export function isValidEmail(email: string): boolean {
   return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+export function isBuiltInAssetPath(trimmed: string): boolean {
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return false;
+  if (trimmed.includes('..') || trimmed.includes('\\')) return false;
+  return (
+    trimmed.startsWith('/assets/') || trimmed.startsWith('/src/assets/')
+  );
+}
+
 export function isSafeAssetUrl(value: unknown): boolean {
   if (typeof value !== 'string') return false;
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > 1200) return false;
 
-  // Reject path traversal and dangerous schemes
   const lower = trimmed.toLowerCase();
   if (
     lower.startsWith('javascript:') ||
@@ -30,17 +39,16 @@ export function isSafeAssetUrl(value: unknown): boolean {
     return false;
   }
 
-  // Allow safe relative root-bound paths (/assets/..., /src/assets/...)
-  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
-    return !trimmed.includes('..') && !trimmed.includes('\\');
+  if (isBuiltInAssetPath(trimmed)) {
+    return true;
   }
 
-  try {
-    const parsed = new URL(trimmed);
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
-  } catch {
-    return false;
+  // External image URLs must belong to our configured Cloudinary cloud name
+  if (isCloudinaryConfigured()) {
+    return isTrustedCloudinaryUrl(trimmed);
   }
+
+  return false;
 }
 
 export function slugifyLower(input: string): string {

@@ -26,10 +26,14 @@ interface AdminPageProps {
 type AdminTab = 'hero' | 'categories' | 'works' | 'journal' | 'enquiries';
 
 interface AuthStatusResponse {
+  adminEnabled?: boolean;
+  disabledReason?: string | null;
   envPasscodeConfigured: boolean;
   needsSetup: boolean;
+  setupAllowed?: boolean;
   storage: {
     tursoCloud: boolean;
+    persistenceEnabled?: boolean;
     cloudinaryConfigured: boolean;
   };
 }
@@ -320,19 +324,25 @@ export function AdminPage({ onExit }: AdminPageProps) {
 
   const fetchEnquiries = useCallback(async () => {
     if (!token) return;
+    if (authStatus && authStatus.storage.persistenceEnabled === false) {
+      setEnquiries([]);
+      return;
+    }
     setEnquiriesLoading(true);
     try {
       const res = await adminFetch('/api/admin/enquiries');
       if (res.ok) {
         const json = (await res.json()) as { enquiries?: EnquiryItem[] };
         setEnquiries(Array.isArray(json.enquiries) ? json.enquiries : []);
+      } else if (res.status === 503) {
+        setEnquiries([]);
       }
     } catch {
       notify('err', 'Unable to load contact enquiries.');
     } finally {
       setEnquiriesLoading(false);
     }
-  }, [token, adminFetch, notify]);
+  }, [token, authStatus, adminFetch, notify]);
 
   useEffect(() => {
     if (token) {
@@ -343,29 +353,102 @@ export function AdminPage({ onExit }: AdminPageProps) {
   const handleUploadImage = useCallback(
     async (file: File): Promise<string | null> => {
       if (!token) return null;
-      const formData = new FormData();
-      formData.append('file', file);
+
+      const allowedTypes = new Set([
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'image/gif',
+      ]);
+      if (!allowedTypes.has(file.type)) {
+        notify(
+          'err',
+          'Unsupported file format. Please upload JPEG, PNG, WEBP, or GIF.',
+        );
+        return null;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        notify('err', 'File upload rejected (5MB max).');
+        return null;
+      }
+
       try {
-        const res = await adminFetch('/api/admin/upload', {
+        // 1. Request signed Cloudinary upload parameters from our server
+        const signRes = await adminFetch('/api/admin/upload/sign', {
           method: 'POST',
-          body: formData,
         });
-        const body = (await res.json().catch(() => ({}))) as {
-          url?: string;
-          storage?: 'cloudinary' | 'local';
+        const signBody = (await signRes.json().catch(() => ({}))) as {
+          signature?: string;
+          timestamp?: number;
+          folder?: string;
+          allowed_formats?: string;
+          api_key?: string;
+          cloud_name?: string;
           error?: string;
         };
-        if (!res.ok || !body.url) {
-          notify('err', body.error || 'Image upload failed.');
+
+        if (
+          !signRes.ok ||
+          !signBody.signature ||
+          !signBody.timestamp ||
+          !signBody.api_key ||
+          !signBody.cloud_name
+        ) {
+          notify('err', signBody.error || 'Cloudinary upload is not configured.');
           return null;
         }
-        notify(
-          'ok',
-          body.storage === 'cloudinary'
-            ? 'Image uploaded to Cloudinary.'
-            : 'Image saved in local media storage (ready to switch to Cloudinary).',
+
+        // 2. Upload directly from browser to Cloudinary (bypasses serverless body limit)
+        const cloudFormData = new FormData();
+        cloudFormData.append('file', file);
+        cloudFormData.append('api_key', signBody.api_key);
+        cloudFormData.append('timestamp', String(signBody.timestamp));
+        cloudFormData.append('signature', signBody.signature);
+        if (signBody.folder) {
+          cloudFormData.append('folder', signBody.folder);
+        }
+        if (signBody.allowed_formats) {
+          cloudFormData.append('allowed_formats', signBody.allowed_formats);
+        }
+
+        const cloudRes = await fetch(
+          `https://api.cloudinary.com/v1_1/${encodeURIComponent(signBody.cloud_name)}/image/upload`,
+          {
+            method: 'POST',
+            body: cloudFormData,
+          },
         );
-        return body.url;
+        const cloudBody = (await cloudRes.json().catch(() => ({}))) as {
+          secure_url?: string;
+          error?: { message?: string };
+        };
+
+        if (!cloudRes.ok || !cloudBody.secure_url) {
+          notify(
+            'err',
+            cloudBody.error?.message || 'Cloudinary upload failed.',
+          );
+          return null;
+        }
+
+        // 3. Confirm & verify uploaded URL against configured cloud name on server
+        const verifyRes = await adminFetch('/api/admin/upload/verify', {
+          method: 'POST',
+          body: JSON.stringify({ url: cloudBody.secure_url }),
+        });
+        const verifyBody = (await verifyRes.json().catch(() => ({}))) as {
+          url?: string;
+          error?: string;
+        };
+
+        if (!verifyRes.ok || !verifyBody.url) {
+          notify('err', verifyBody.error || 'Could not verify uploaded asset.');
+          return null;
+        }
+
+        notify('ok', 'Image uploaded to Cloudinary.');
+        return verifyBody.url;
       } catch {
         notify('err', 'Network error uploading image.');
         return null;
@@ -706,6 +789,7 @@ export function AdminPage({ onExit }: AdminPageProps) {
   };
 
   const tursoCloud = authStatus?.storage.tursoCloud ?? false;
+  const persistenceEnabled = authStatus?.storage.persistenceEnabled ?? true;
   const cloudinaryConfigured = authStatus?.storage.cloudinaryConfigured ?? false;
   const unreadCount = enquiries.filter((e) => e.status === 'NEW').length;
 
@@ -725,7 +809,9 @@ export function AdminPage({ onExit }: AdminPageProps) {
 
   // --- Unauthenticated Gate ---
   if (!token) {
-    const needsSetup = authStatus?.needsSetup ?? false;
+    const adminEnabled = authStatus?.adminEnabled ?? true;
+    const disabledReason = authStatus?.disabledReason ?? null;
+    const needsSetup = adminEnabled && (authStatus?.needsSetup ?? false);
 
     return (
       <div className="min-h-screen bg-white text-black px-5 sm:px-8 py-10 flex flex-col justify-between">
@@ -740,8 +826,18 @@ export function AdminPage({ onExit }: AdminPageProps) {
           </button>
 
           <div className="hidden sm:flex items-center gap-5 font-mono text-[10px] tracking-[0.12em] uppercase text-[#595959]">
-            <span>DB: {tursoCloud ? 'TURSO CLOUD' : 'LOCAL SQLITE'}</span>
-            <span>MEDIA: {cloudinaryConfigured ? 'CLOUDINARY READY' : 'URL MODE'}</span>
+            <span>
+              DB:{' '}
+              {tursoCloud
+                ? 'TURSO CLOUD'
+                : persistenceEnabled
+                  ? 'LOCAL SQLITE'
+                  : 'READ-ONLY SEED'}
+            </span>
+            <span>
+              MEDIA:{' '}
+              {cloudinaryConfigured ? 'CLOUDINARY READY' : 'CLOUDINARY MISSING'}
+            </span>
           </div>
         </div>
 
@@ -752,7 +848,11 @@ export function AdminPage({ onExit }: AdminPageProps) {
                 STUDIO ARCHIVE MANAGEMENT
               </span>
               <h1 className="mt-2 text-[28px] font-normal tracking-[-0.02em] text-black">
-                {needsSetup ? 'Initialize Studio Admin' : 'Admin Sign In'}
+                {!adminEnabled
+                  ? 'Admin Disabled'
+                  : needsSetup
+                    ? 'Initialize Studio Admin'
+                    : 'Admin Sign In'}
               </h1>
             </div>
             <Lock className="w-5 h-5 text-black/70" strokeWidth={1.5} />
@@ -762,6 +862,27 @@ export function AdminPage({ onExit }: AdminPageProps) {
             <p className="py-10 font-mono text-[11px] tracking-[0.12em] uppercase text-[#666666]">
               CHECKING STUDIO SECURITY...
             </p>
+          ) : !adminEnabled ? (
+            <div className="mt-6 space-y-5">
+              <p className="text-[14px] leading-[1.6] text-[#404040]">
+                {disabledReason ||
+                  'Admin authentication is disabled until required server environment variables are configured.'}
+              </p>
+              <div className="border border-black/15 bg-[#fafafa] px-4 py-3.5 font-mono text-[10px] tracking-[0.08em] uppercase text-[#595959] space-y-1.5">
+                <div>PUBLIC PORTFOLIO: ACTIVE (READ-ONLY)</div>
+                <div>
+                  REQUIRED ENV: SESSION_SECRET &amp; ADMIN_PASSCODE
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onExit}
+                className="w-full inline-flex items-center justify-between border border-black px-5 py-3.5 font-mono text-[11px] tracking-[0.14em] uppercase bg-black text-white hover:bg-black/85 transition-colors cursor-pointer"
+              >
+                <span>RETURN TO PUBLIC SITE</span>
+                <ArrowLeft className="w-3.5 h-3.5" strokeWidth={1.5} />
+              </button>
+            </div>
           ) : needsSetup ? (
             <form onSubmit={handleSetupAdmin} className="mt-6 space-y-6">
               <p className="text-[14px] leading-[1.6] text-[#404040]">
@@ -992,13 +1113,17 @@ export function AdminPage({ onExit }: AdminPageProps) {
             <div className="flex items-center justify-between text-[#595959]">
               <span>DB</span>
               <span className="text-black">
-                {tursoCloud ? 'TURSO CLOUD' : 'LOCAL SQLITE'}
+                {tursoCloud
+                  ? 'TURSO CLOUD'
+                  : persistenceEnabled
+                    ? 'LOCAL SQLITE'
+                    : 'READ-ONLY SEED'}
               </span>
             </div>
             <div className="flex items-center justify-between text-[#595959]">
               <span>MEDIA</span>
               <span className="text-black">
-                {cloudinaryConfigured ? 'CLOUDINARY OK' : 'LOCAL STORAGE'}
+                {cloudinaryConfigured ? 'CLOUDINARY OK' : 'MISSING'}
               </span>
             </div>
           </div>

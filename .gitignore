@@ -4,8 +4,9 @@ dist/
 coverage/
 .DS_Store
 *.log
-.env*
+.env
+.env.*
 !.env.example
 local-studio.db*
 uploads/
-
+.vercel/
